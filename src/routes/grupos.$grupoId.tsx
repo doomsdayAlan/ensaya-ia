@@ -14,6 +14,8 @@ import {
   Plus,
   Send,
   Crown,
+  Mic,
+  Play,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
@@ -26,10 +28,13 @@ import {
   reemplazarLibreto,
   publicarAnuncio,
   eliminarAnuncio,
+  listGrabacionesGrupo,
+  eliminarGrabacionGrupo,
   nombreMiembro,
   formatGrupoDate,
   type GrupoDetalle,
   type MiembroConPerfil,
+  type GrupoGrabacionMeta,
 } from "@/lib/grupos-api";
 import { getScripts } from "@/lib/rehearsal-data";
 
@@ -37,7 +42,7 @@ export const Route = createFileRoute("/grupos/$grupoId")({
   component: GrupoDetallePage,
 });
 
-type Tab = "MATERIALES" | "MIEMBROS" | "ANUNCIOS";
+type Tab = "MATERIALES" | "MIEMBROS" | "ANUNCIOS" | "GRABACIONES";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -455,6 +460,93 @@ function TabAnuncios({ detalle }: { detalle: GrupoDetalle }) {
   );
 }
 
+// ── Tab GRABACIONES ──────────────────────────────────────────────────────────
+
+function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
+  const queryClient = useQueryClient();
+  const { grupo, miRol } = detalle;
+  const isAdmin = miRol === "admin";
+
+  const { data: grabaciones = [], isLoading } = useQuery({
+    queryKey: ["grupo-grabaciones", grupo.id],
+    queryFn: () => listGrabacionesGrupo(grupo.id),
+  });
+
+  const { mutate: borrar, isPending } = useMutation({
+    mutationFn: (id: string) => eliminarGrabacionGrupo(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["grupo-grabaciones", grupo.id] });
+      toast.success("Grabacion eliminada.");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  function reproducir(item: GrupoGrabacionMeta) {
+    const audio = new Audio(item.audioUrl);
+    void audio.play().catch(() => toast.error("No se pudo reproducir el audio."));
+  }
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border/60 rounded-xl p-4 text-sm text-muted-foreground">
+        Cargando grabaciones...
+      </div>
+    );
+  }
+
+  if (grabaciones.length === 0) {
+    return (
+      <div className="bg-card border border-border/60 rounded-xl p-8 text-center">
+        <Mic className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground mb-1">Aun no hay grabaciones en este grupo.</p>
+        <p className="text-xs text-muted-foreground">
+          En Configurar ensayo elige modo <span className="text-foreground">En grupo</span>, interpreta tu
+          personaje y las tomas se guardan por linea para el resto del elenco.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        {grabaciones.length} grabacion{grabaciones.length === 1 ? "" : "es"} · se reproducen en el ensayo
+        cuando toca esa linea de otro actor.
+      </p>
+      {grabaciones.map((item) => (
+        <div key={item.id} className="bg-card border border-border/60 rounded-xl p-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => reproducir(item)}
+            className="shrink-0 w-10 h-10 rounded-full bg-primary/15 text-primary grid place-items-center hover:bg-primary/25 transition"
+            title="Reproducir"
+          >
+            <Play className="w-4 h-4 fill-current" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{item.characterName}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              {item.actorName} · {formatGrupoDate(item.createdAt)}
+              {item.durationSec ? ` · ${item.durationSec.toFixed(1)}s` : ""}
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => borrar(item.id)}
+              className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition disabled:opacity-50"
+              title="Eliminar grabacion"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Página principal ─────────────────────────────────────────────────────────
 
 function GrupoDetallePage() {
@@ -470,6 +562,7 @@ function GrupoDetallePage() {
     { key: "MATERIALES", label: "Materiales", icon: BookOpen },
     { key: "MIEMBROS", label: "Miembros", icon: Users },
     { key: "ANUNCIOS", label: "Anuncios", icon: Megaphone },
+    { key: "GRABACIONES", label: "Grabaciones", icon: Mic },
   ];
 
   return (
@@ -549,6 +642,7 @@ function GrupoDetallePage() {
             {tab === "MATERIALES" && <TabMateriales detalle={detalle} />}
             {tab === "MIEMBROS" && <TabMiembros detalle={detalle} />}
             {tab === "ANUNCIOS" && <TabAnuncios detalle={detalle} />}
+            {tab === "GRABACIONES" && <TabGrabaciones detalle={detalle} />}
           </>
         )}
       </div>

@@ -40,6 +40,7 @@ import {
   type ActiveRehearsal,
 } from "@/lib/rehearsal-runtime";
 import { getDemoScriptSetup } from "@/lib/demo-script";
+import { getGrabacionesGrupo, getGrupoParaScript, saveGrabacionGrupo } from "@/lib/grupos-api";
 
 export const Route = createFileRoute("/ensayo")({
   component: Ensayo,
@@ -64,7 +65,10 @@ function Ensayo() {
   const listenRef = useRef<{ stop: () => void } | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const lastTakeBlobRef = useRef<Blob | null>(null);
+  const takeStartedAtRef = useRef<number>(0);
   const [lastTakeUrl, setLastTakeUrl] = useState<string | null>(null);
+  const [groupAudioUrls, setGroupAudioUrls] = useState<Record<string, string>>({});
   const advancingRef = useRef(false);
   const scoresRef = useRef<number[]>([]);
   const skippedRef = useRef(0);
@@ -113,6 +117,8 @@ function Ensayo() {
     null;
   const difficulty = activeConfig?.aiDifficulty ?? latest?.ai_difficulty ?? 50;
   const mode = activeConfig?.mode ?? latest?.mode ?? "individual";
+  const isGrupoMode = mode === "grupo";
+  const grupoId = activeConfig?.grupoId ?? null;
   const total = lines.length || latest?.total_lines || 1;
   const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
@@ -125,13 +131,44 @@ function Ensayo() {
     recorderRef.current = null;
   };
 
+  const stopTakeAndGetBlob = () =>
+    new Promise<Blob | null>((resolve) => {
+      const recorder = recorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        resolve(lastTakeBlobRef.current);
+        return;
+      }
+      const stream = recorder.stream;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        if (!chunksRef.current.length) {
+          resolve(lastTakeBlobRef.current);
+          return;
+        }
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        lastTakeBlobRef.current = blob;
+        setLastTakeUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+        resolve(blob);
+      };
+      recorder.stop();
+    });
+
   const startTake = async () => {
     stopTake();
+    lastTakeBlobRef.current = null;
     if (!navigator.mediaDevices?.getUserMedia) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
+      takeStartedAtRef.current = Date.now();
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunksRef.current.push(event.data);
       };
@@ -139,6 +176,7 @@ function Ensayo() {
         stream.getTracks().forEach((track) => track.stop());
         if (!chunksRef.current.length) return;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        lastTakeBlobRef.current = blob;
         setLastTakeUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);
@@ -148,6 +186,82 @@ function Ensayo() {
       recorderRef.current = recorder;
     } catch {
       // El reconocimiento de voz sigue funcionando aunque no se grabe el WebM.
+    }
+  };
+
+  const playAudioUrl = (url: string) =>
+    new Promise<void>((resolve) => {
+      const audio = new Audio(url);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      audio.onended = finish;
+      audio.onerror = finish;
+      void audio.play().catch(finish);
+    });
+
+  useEffect(() => {
+    const scriptId = activeConfig?.scriptId ?? latest?.script_id;
+    if (!isGrupoMode || !scriptId) {
+      setGroupAudioUrls({});
+      return;
+    }
+    let cancelled = false;
+    const created: string[] = [];
+    void getGrabacionesGrupo(scriptId)
+      .then((urls) => {
+        if (cancelled) {
+          Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
+          return;
+        }
+        created.push(...Object.values(urls));
+        setGroupAudioUrls(urls);
+      })
+      .catch(() => {
+        if (!cancelled) setGroupAudioUrls({});
+      });
+    return () => {
+      cancelled = true;
+      created.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [isGrupoMode, activeConfig?.scriptId, latest?.script_id]);
+
+  const persistGrupoTake = async (line: ScriptLineWithCharacter, blob: Blob | null) => {
+    if (!isGrupoMode || !blob?.size || !line.id) return;
+    const scriptId = activeConfig?.scriptId ?? setup?.script?.id ?? latest?.script_id;
+    if (!scriptId) return;
+    let resolvedGrupoId = grupoId;
+    if (!resolvedGrupoId) {
+      try {
+        resolvedGrupoId = (await getGrupoParaScript(scriptId))?.grupoId ?? null;
+      } catch {
+        return;
+      }
+    }
+    if (!resolvedGrupoId) return;
+    try {
+      const saved = await saveGrabacionGrupo({
+        grupoId: resolvedGrupoId,
+        scriptId,
+        lineId: line.id,
+        characterId: line.character_id,
+        characterName: line.character?.name ?? selectedCharacter?.name ?? "Actor",
+        blob,
+        durationSec: takeStartedAtRef.current
+          ? Math.max(0.1, (Date.now() - takeStartedAtRef.current) / 1000)
+          : null,
+      });
+      setGroupAudioUrls((prev) => {
+        const next = { ...prev };
+        if (prev[line.id]) URL.revokeObjectURL(prev[line.id]);
+        next[line.id] = saved.audioUrl;
+        return next;
+      });
+    } catch {
+      // La toma local sigue disponible aunque no se pueda persistir.
     }
   };
 
@@ -297,7 +411,12 @@ function Ensayo() {
       setConnectionStatus(`Linea reconocida (${verdict.percent}%).`);
       toast.success("La IA reconocio tu linea");
       setTypedLine("");
-      advance({ score: verdict.score });
+      const line = currentLine;
+      void (async () => {
+        const blob = await stopTakeAndGetBlob();
+        await persistGrupoTake(line, blob);
+        advance({ score: verdict.score });
+      })();
       return true;
     }
     if (verdict.close || fromTyping) {
@@ -336,13 +455,22 @@ function Ensayo() {
     }
 
     const character = currentLine.character;
-    setConnectionStatus(`${character?.name ?? "IA"} esta interpretando su linea...`);
+    const savedUrl = isGrupoMode ? groupAudioUrls[currentLine.id] : undefined;
+    setConnectionStatus(
+      savedUrl
+        ? `${character?.name ?? "Actor"} (grabacion del grupo)...`
+        : `${character?.name ?? "IA"} esta interpretando su linea...`,
+    );
     setIsSpeaking(true);
     setIsListening(false);
     stopListen();
 
     let cancelled = false;
-    void speakLine(currentLine.text, character?.voice)
+    const playback = savedUrl
+      ? playAudioUrl(savedUrl)
+      : speakLine(currentLine.text, character?.voice);
+
+    void playback
       .then(() => {
         if (cancelled) return;
         setIsSpeaking(false);

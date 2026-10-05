@@ -21,6 +21,7 @@ import { TopBar } from "@/components/TopBar";
 import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
 import { getDemoScriptSetup } from "@/lib/demo-script";
+import { getGrupoParaScript } from "@/lib/grupos-api";
 
 export const Route = createFileRoute("/configuracion-ensayo")({
   component: ConfigEnsayo,
@@ -105,10 +106,22 @@ function ConfigEnsayo() {
       (current) =>
         current ??
         setup.characters.find((char) => char?.actor_type === "user")?.id ??
-        setup.characters[0]?.id ?? 
+        setup.characters[0]?.id ??
         null,
     );
   }, [setup?.characters]);
+
+  useEffect(() => {
+    if (mode !== "grupo" || !selectedScriptId) return;
+    let cancelled = false;
+    void getGrupoParaScript(selectedScriptId).then((info) => {
+      if (cancelled || !info?.personajeId) return;
+      setSelectedCharacterId(info.personajeId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, selectedScriptId]);
 
   const saveTemplate = useMutation({
     mutationFn: () =>
@@ -138,10 +151,23 @@ function ConfigEnsayo() {
         throw new Error("Selecciona el personaje que vas a interpretar.");
       }
 
+      let grupoId: string | null = null;
+      let characterId = selectedCharacter.id;
+      if (mode === "grupo") {
+        const grupoInfo = await getGrupoParaScript(setup.script.id);
+        if (!grupoInfo?.grupoId) {
+          throw new Error(
+            "Modo grupo: anade este libreto a un grupo y asigna tu personaje en Grupos.",
+          );
+        }
+        grupoId = grupoInfo.grupoId;
+        if (grupoInfo.personajeId) characterId = grupoInfo.personajeId;
+      }
+
       return startLocalRehearsal({
         scriptId: setup.script.id,
         sceneId: setup.scene.id,
-        selectedCharacterId: selectedCharacter.id,
+        selectedCharacterId: characterId,
         mode,
         aiDifficulty: diff,
         suggestEmotions: emo,
@@ -149,6 +175,7 @@ function ConfigEnsayo() {
         feedbackEnabled: feedback,
         totalLines: setup.lines.length,
         source: setup.script.id.startsWith("00000000-0000-4000-8000") ? "demo" : "supabase",
+        grupoId,
       });
     },
     onSuccess: (active) => {

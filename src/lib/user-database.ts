@@ -8,9 +8,15 @@ export type StoredUser = {
   email: string;
   passwordHash: string;
   passwordSalt: string;
+  /** PBKDF2 iterations. Ausente = hash legado (12_000). */
+  passwordIterations?: number;
   displayName: string;
   createdAt: string;
 };
+
+/** OWASP recomendado para PBKDF2-SHA256. */
+export const PBKDF2_ITERATIONS = 600_000;
+const LEGACY_PBKDF2_ITERATIONS = 12_000;
 
 export type StoredProfile = {
   user_id: string;
@@ -143,26 +149,38 @@ function bytesToHex(bytes: ArrayBuffer) {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function hashPassword(password: string, salt: string) {
+async function hashPassword(password: string, salt: string, iterations: number) {
   const encoded = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", encoded.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: encoded.encode(salt), iterations: 12_000 },
+    { name: "PBKDF2", hash: "SHA-256", salt: encoded.encode(salt), iterations },
     key,
     256,
   );
   return bytesToHex(bits);
 }
 
+function iterationsFor(user: StoredUser) {
+  return user.passwordIterations ?? LEGACY_PBKDF2_ITERATIONS;
+}
+
 export async function hashNewPassword(password: string) {
   const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)).buffer);
-  const passwordHash = await hashPassword(password, salt);
-  return { passwordHash, passwordSalt: salt };
+  const passwordHash = await hashPassword(password, salt, PBKDF2_ITERATIONS);
+  return { passwordHash, passwordSalt: salt, passwordIterations: PBKDF2_ITERATIONS };
 }
 
 export async function passwordMatches(user: StoredUser, password: string) {
-  const actual = await hashPassword(password, user.passwordSalt);
+  const actual = await hashPassword(password, user.passwordSalt, iterationsFor(user));
   return actual === user.passwordHash;
+}
+
+/** Si el hash usa el conteo legado, lo reescribe a 600_000 tras un login correcto. */
+export async function upgradePasswordHashIfNeeded(user: StoredUser, password: string) {
+  if (iterationsFor(user) >= PBKDF2_ITERATIONS) return user;
+  const next = { ...user, ...(await hashNewPassword(password)) };
+  await updateUser(next);
+  return next;
 }
 
 export async function findUserByEmail(email: string) {

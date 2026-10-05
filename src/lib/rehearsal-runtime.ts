@@ -30,6 +30,8 @@ export type ActiveRehearsal = {
   supabaseSessionId: string | null;
   startedAt: string;
   source: "supabase" | "demo";
+  /** Presente en modo grupo: id del grupo local asociado al libreto. */
+  grupoId?: string | null;
 };
 
 export type LocalRehearsalReport = {
@@ -194,6 +196,7 @@ export async function startLocalRehearsal(draft: {
   feedbackEnabled: boolean;
   totalLines: number;
   source: "supabase" | "demo";
+  grupoId?: string | null;
 }) {
   const active: ActiveRehearsal = {
     scriptId: draft.scriptId,
@@ -207,6 +210,7 @@ export async function startLocalRehearsal(draft: {
     supabaseSessionId: null,
     startedAt: new Date().toISOString(),
     source: draft.source,
+    grupoId: draft.grupoId ?? null,
   };
   saveActiveRehearsal(active);
   return active;

@@ -14,6 +14,7 @@ import {
   insertUser,
   passwordMatches,
   updateUser,
+  upgradePasswordHashIfNeeded,
   upsertProfile,
   type StoredProfile,
 } from "@/lib/user-database";
@@ -31,7 +32,7 @@ const LEGACY_MIGRATED_KEY = "cine-estrella-idb-migrated";
 export const DEMO_ACCOUNT = {
   email: "demo@ensayaia.local",
   password: "ensayo123",
-  displayName: "Alana",
+  displayName: "Cuenta demo",
 } as const;
 
 const LEGACY_DEMO_EMAIL = "demo@cineestrella.local";
@@ -256,7 +257,7 @@ export async function enterDemoAccount() {
       ...account,
       ...hashed,
       email: DEMO_ACCOUNT.email,
-      displayName: account.displayName || DEMO_ACCOUNT.displayName,
+      displayName: DEMO_ACCOUNT.displayName,
     };
     await updateUser(account);
   }
@@ -280,9 +281,10 @@ export async function loginLocalAccount({ email, password }: { email: string; pa
   if (!(await passwordMatches(account, password))) {
     throw new Error("La contraseña no coincide.");
   }
-  const stored = await getProfile(account.id);
+  const upgraded = await upgradePasswordHashIfNeeded(account, password);
+  const stored = await getProfile(upgraded.id);
   if (stored) saveLocalProfile(profileFromStored(stored));
-  return persistUserSession(account);
+  return persistUserSession(upgraded);
 }
 
 export function logoutLocalAccount() {

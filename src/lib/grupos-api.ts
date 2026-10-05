@@ -6,6 +6,15 @@ import { getCurrentUserId, getScriptDetails, type ScriptDetails } from "@/lib/re
 import { getLocalAuthUser, loadLocalProfile } from "@/lib/local-auth";
 import { listLocalScripts } from "@/lib/local-library";
 import { canUseBrowserStorage, readJson, writeJson } from "@/lib/browser";
+import {
+  deleteGrabacionById,
+  deleteGrabacionesByGrupo,
+  deleteGrabacionesByScript,
+  grabacionesMapForScript,
+  listGrabacionesByGrupo,
+  upsertGrupoGrabacion,
+  type StoredGrupoGrabacion,
+} from "@/lib/grupo-recordings";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type GrupoRecord = {
@@ -241,6 +250,7 @@ export async function eliminarGrupo(grupoId: string) {
     libretos: store.libretos.filter((item) => item.grupo_id !== grupoId),
     anuncios: store.anuncios.filter((item) => item.grupo_id !== grupoId),
   });
+  await deleteGrabacionesByGrupo(grupoId).catch(() => undefined);
 }
 
 export async function salirDeGrupo(grupoId: string) {
@@ -281,6 +291,7 @@ export async function addLibretoAlGrupo(grupoId: string, scriptId: string) {
 
 export async function reemplazarLibreto(grupoId: string, scriptId: string) {
   const store = readStore();
+  const previous = store.libretos.filter((item) => item.grupo_id === grupoId).map((item) => item.script_id);
   store.libretos = store.libretos.filter((item) => item.grupo_id !== grupoId);
   store.miembros = store.miembros.map((item) =>
     item.grupo_id === grupoId ? { ...item, personaje_id: null } : item,
@@ -292,12 +303,18 @@ export async function reemplazarLibreto(grupoId: string, scriptId: string) {
     added_at: new Date().toISOString(),
   });
   writeStore(store);
+  await Promise.all(
+    previous
+      .filter((id) => id !== scriptId)
+      .map((id) => deleteGrabacionesByScript(id).catch(() => undefined)),
+  );
 }
 
 export async function removeLibretoDelGrupo(grupoId: string, scriptId: string) {
   const store = readStore();
   store.libretos = store.libretos.filter((item) => !(item.grupo_id === grupoId && item.script_id === scriptId));
   writeStore(store);
+  await deleteGrabacionesByScript(scriptId).catch(() => undefined);
 }
 
 export async function publicarAnuncio(grupoId: string, contenido: string) {
@@ -363,6 +380,77 @@ export async function getScriptDetailsForGrupo(scriptId: string, _grupoId: strin
   return getScriptDetails(scriptId);
 }
 
-export async function getGrabacionesGrupo(_scriptId: string): Promise<Record<string, string>> {
-  return {};
+export type GrupoGrabacionMeta = {
+  id: string;
+  grupoId: string;
+  scriptId: string;
+  lineId: string;
+  characterId: string | null;
+  characterName: string;
+  userId: string;
+  actorName: string;
+  createdAt: string;
+  durationSec: number | null;
+  audioUrl: string;
+};
+
+/** Mapa { [lineId]: audioUrl } para reproducir lineas de otros actores en el ensayo. */
+export async function getGrabacionesGrupo(scriptId: string): Promise<Record<string, string>> {
+  try {
+    return await grabacionesMapForScript(scriptId);
+  } catch {
+    return {};
+  }
+}
+
+export async function listGrabacionesGrupo(grupoId: string): Promise<GrupoGrabacionMeta[]> {
+  const rows = await listGrabacionesByGrupo(grupoId);
+  return rows.map((row) => toGrabacionMeta(row));
+}
+
+export async function saveGrabacionGrupo(input: {
+  grupoId: string;
+  scriptId: string;
+  lineId: string;
+  characterId: string | null;
+  characterName: string;
+  blob: Blob;
+  durationSec?: number | null;
+}): Promise<GrupoGrabacionMeta> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Debes iniciar sesion para guardar la grabacion.");
+  if (!input.blob.size) throw new Error("La grabacion esta vacia.");
+
+  const row = await upsertGrupoGrabacion({
+    grupoId: input.grupoId,
+    scriptId: input.scriptId,
+    lineId: input.lineId,
+    characterId: input.characterId,
+    characterName: input.characterName,
+    userId,
+    mimeType: input.blob.type || "audio/webm",
+    blob: input.blob,
+    durationSec: input.durationSec ?? null,
+  });
+  return toGrabacionMeta(row);
+}
+
+export async function eliminarGrabacionGrupo(grabacionId: string) {
+  await deleteGrabacionById(grabacionId);
+}
+
+function toGrabacionMeta(row: StoredGrupoGrabacion): GrupoGrabacionMeta {
+  return {
+    id: row.id,
+    grupoId: row.grupoId,
+    scriptId: row.scriptId,
+    lineId: row.lineId,
+    characterId: row.characterId,
+    characterName: row.characterName,
+    userId: row.userId,
+    actorName: nombreMiembro(perfilDe(row.userId)),
+    createdAt: row.createdAt,
+    durationSec: row.durationSec,
+    audioUrl: URL.createObjectURL(row.blob),
+  };
 }

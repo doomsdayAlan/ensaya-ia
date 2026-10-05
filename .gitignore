@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Metadata de plantilla Lovable (no se usa en runtime)
+.lovable/
+
 # Logs
 logs
 *.log

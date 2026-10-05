@@ -32,7 +32,7 @@ Permite el micrófono. Configurar ensayo → Iniciar ensayo.
 
 ## Cuentas y datos
 
-Inicio de sesión obligatorio (`VITE_REQUIRE_AUTH`). Cuentas en IndexedDB (tablas `users` y `perfil_usuario`). Libretos, grupos e historial en el navegador.
+Inicio de sesión obligatorio (`VITE_REQUIRE_AUTH`). Cuentas en IndexedDB (tablas `users` y `perfil_usuario`). Libretos, grupos e historial en el navegador. Las grabaciones de modo grupo viven en IndexedDB (`ensaya-ia-grabaciones`) y se reproducen en el ensayo cuando toca la línea de otro actor.
 
 ## Crecimiento
 

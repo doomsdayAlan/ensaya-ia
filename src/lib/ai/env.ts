@@ -17,7 +17,7 @@ export function geminiApiKey() {
 }
 
 export function geminiModel() {
-  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-2.0-flash";
+  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-2.5-flash";
 }
 
 export function groqApiKey() {
