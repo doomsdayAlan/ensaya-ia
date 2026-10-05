@@ -178,21 +178,23 @@ function Configuracion() {
                 </div>
               </div>
             </div>
-            <SettingCard
-              icon={LogIn}
-              title="Pedir inicio de sesion"
-              desc="Si esta activo, Inicio y el resto de pantallas piden cuenta antes de entrar."
-              enabled={requireLogin}
-              onToggle={(value) => {
-                setRequireLogin(value);
-                setAuthRequired(value);
-                toast.success(
-                  value
-                    ? "La app pedira sesion para entrar"
-                    : "La app permite entrar como invitado",
-                );
-              }}
-            />
+            {import.meta.env.DEV && (
+              <SettingCard
+                icon={LogIn}
+                title="Pedir inicio de sesion (solo desarrollo)"
+                desc="En produccion manda VITE_REQUIRE_AUTH. Este interruptor no aparece fuera de desarrollo."
+                enabled={requireLogin}
+                onToggle={(value) => {
+                  setRequireLogin(value);
+                  setAuthRequired(value);
+                  toast.success(
+                    value
+                      ? "La app pedira sesion para entrar"
+                      : "La app permite entrar como invitado",
+                  );
+                }}
+              />
+            )}
             <SettingCard
               icon={Bell}
               title="Notificaciones"

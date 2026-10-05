@@ -90,6 +90,7 @@ type Store = {
 };
 
 const STORE_KEY = "ensaya-ia-grupos";
+/** Clave legacy solo para migracion; el producto es Ensaya IA. */
 const LEGACY_STORE_KEY = "cine-estrella-grupos";
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -242,7 +243,19 @@ export async function getGrupoDetalle(grupoId: string): Promise<GrupoDetalle> {
   };
 }
 
+function assertGrupoAdmin(grupoId: string, userId: string) {
+  const store = readStore();
+  const me = store.miembros.find((item) => item.grupo_id === grupoId && item.user_id === userId);
+  if (!me || me.rol !== "admin") {
+    throw new Error("Solo el administrador del grupo puede hacer esto.");
+  }
+  return store;
+}
+
 export async function eliminarGrupo(grupoId: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  assertGrupoAdmin(grupoId, userId);
   const store = readStore();
   writeStore({
     grupos: store.grupos.filter((item) => item.id !== grupoId),
@@ -262,13 +275,17 @@ export async function salirDeGrupo(grupoId: string) {
 }
 
 export async function eliminarMiembro(grupoId: string, miembroUserId: string) {
-  const store = readStore();
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  const store = assertGrupoAdmin(grupoId, userId);
   store.miembros = store.miembros.filter((item) => !(item.grupo_id === grupoId && item.user_id === miembroUserId));
   writeStore(store);
 }
 
 export async function asignarPersonaje(grupoId: string, miembroUserId: string, personajeId: string | null) {
-  const store = readStore();
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  const store = assertGrupoAdmin(grupoId, userId);
   const miembro = store.miembros.find((item) => item.grupo_id === grupoId && item.user_id === miembroUserId);
   if (!miembro) throw new Error("Miembro no encontrado.");
   miembro.personaje_id = personajeId;
@@ -276,7 +293,9 @@ export async function asignarPersonaje(grupoId: string, miembroUserId: string, p
 }
 
 export async function addLibretoAlGrupo(grupoId: string, scriptId: string) {
-  const store = readStore();
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  const store = assertGrupoAdmin(grupoId, userId);
   if (store.libretos.some((item) => item.grupo_id === grupoId && item.script_id === scriptId)) {
     throw new Error("Ese libreto ya esta en el grupo.");
   }
@@ -290,7 +309,9 @@ export async function addLibretoAlGrupo(grupoId: string, scriptId: string) {
 }
 
 export async function reemplazarLibreto(grupoId: string, scriptId: string) {
-  const store = readStore();
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  const store = assertGrupoAdmin(grupoId, userId);
   const previous = store.libretos.filter((item) => item.grupo_id === grupoId).map((item) => item.script_id);
   store.libretos = store.libretos.filter((item) => item.grupo_id !== grupoId);
   store.miembros = store.miembros.map((item) =>
@@ -311,7 +332,9 @@ export async function reemplazarLibreto(grupoId: string, scriptId: string) {
 }
 
 export async function removeLibretoDelGrupo(grupoId: string, scriptId: string) {
-  const store = readStore();
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  const store = assertGrupoAdmin(grupoId, userId);
   store.libretos = store.libretos.filter((item) => !(item.grupo_id === grupoId && item.script_id === scriptId));
   writeStore(store);
   await deleteGrabacionesByScript(scriptId).catch(() => undefined);
@@ -334,7 +357,15 @@ export async function publicarAnuncio(grupoId: string, contenido: string) {
 }
 
 export async function eliminarAnuncio(anuncioId: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
   const store = readStore();
+  const anuncio = store.anuncios.find((item) => item.id === anuncioId);
+  if (!anuncio) return;
+  const me = store.miembros.find((item) => item.grupo_id === anuncio.grupo_id && item.user_id === userId);
+  if (!me || (me.rol !== "admin" && anuncio.user_id !== userId)) {
+    throw new Error("No tienes permiso para eliminar este anuncio.");
+  }
   store.anuncios = store.anuncios.filter((item) => item.id !== anuncioId);
   writeStore(store);
 }
@@ -397,9 +428,12 @@ export type GrupoGrabacionMeta = {
 };
 
 /** Mapa { [lineId]: audioUrl } para reproducir lineas de otros actores en el ensayo. */
-export async function getGrabacionesGrupo(scriptId: string): Promise<Record<string, string>> {
+export async function getGrabacionesGrupo(
+  scriptId: string,
+  grupoId?: string | null,
+): Promise<Record<string, string>> {
   try {
-    return await grabacionesMapForScript(scriptId);
+    return await grabacionesMapForScript(scriptId, grupoId);
   } catch {
     return {};
   }
@@ -441,7 +475,10 @@ export async function saveGrabacionGrupo(input: {
   return toGrabacionMeta(row);
 }
 
-export async function eliminarGrabacionGrupo(grabacionId: string) {
+export async function eliminarGrabacionGrupo(grabacionId: string, grupoId: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("No autenticado.");
+  assertGrupoAdmin(grupoId, userId);
   await deleteGrabacionById(grabacionId);
 }
 

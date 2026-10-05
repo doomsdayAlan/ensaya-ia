@@ -37,6 +37,7 @@ export type StoredProfile = {
 };
 
 const DB_NAME = "ensaya-ia-db";
+/** Nombre de IndexedDB legacy solo para migracion; el producto es Ensaya IA. */
 const LEGACY_DB_NAME = "cine-estrella-db";
 const DB_VERSION = 1;
 

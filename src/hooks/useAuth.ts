@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { isAuthRequired } from "@/lib/app-config";
 import {
+  ensureLocalAuthReady,
   getLocalAuthUser,
   logoutLocalAccount,
   subscribeLocalAuth,
@@ -14,7 +15,9 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     const sync = () => {
+      if (!alive) return;
       setUser(getLocalAuthUser());
       setLoading(false);
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
@@ -22,8 +25,12 @@ export function useAuth() {
       queryClient.invalidateQueries({ queryKey: ["scripts"] });
     };
 
-    sync();
-    return subscribeLocalAuth(sync);
+    void ensureLocalAuthReady().finally(sync);
+    const unsubscribe = subscribeLocalAuth(sync);
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
   }, [queryClient]);
 
   return {
@@ -32,7 +39,6 @@ export function useAuth() {
     loading,
     signOut: async () => {
       logoutLocalAccount();
-      // Con el candado activo, Inicio no debe verse sin cuenta.
       if (isAuthRequired() && typeof window !== "undefined") {
         window.location.assign("/login");
       }

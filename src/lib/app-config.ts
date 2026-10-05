@@ -2,11 +2,11 @@
  * Banderas de producto para local y nube.
  *
  * VITE_REQUIRE_AUTH en .env (o en el panel del hosting) es el valor por defecto.
- * Configuracion > "Pedir inicio de sesion" lo guarda en este navegador y gana
- * sobre el .env, para poder desbloquear una demo sin redeploy.
+ * El override en localStorage solo se puede cambiar en modo desarrollo.
  */
 const REQUIRE_AUTH_OVERRIDE_KEY = "ensaya-ia-require-auth";
 const REDIRECT_KEY = "ensaya-ia-post-login";
+/** Claves legacy solo para migracion; el producto es Ensaya IA. */
 const LEGACY_REQUIRE_AUTH_OVERRIDE_KEY = "cine-estrella-require-auth";
 const LEGACY_REDIRECT_KEY = "cine-estrella-post-login";
 
@@ -19,7 +19,7 @@ export function envFlag(name: string, fallback = false) {
 
 /** Si es true, Inicio y el resto de la app piden cuenta antes de entrar. */
 export function isAuthRequired() {
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && import.meta.env.DEV) {
     const override =
       localStorage.getItem(REQUIRE_AUTH_OVERRIDE_KEY) ??
       localStorage.getItem(LEGACY_REQUIRE_AUTH_OVERRIDE_KEY);
@@ -29,8 +29,9 @@ export function isAuthRequired() {
   return envFlag("VITE_REQUIRE_AUTH", true);
 }
 
+/** Solo disponible en desarrollo: en produccion manda VITE_REQUIRE_AUTH. */
 export function setAuthRequired(required: boolean) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !import.meta.env.DEV) return;
   localStorage.setItem(REQUIRE_AUTH_OVERRIDE_KEY, required ? "on" : "off");
 }
 

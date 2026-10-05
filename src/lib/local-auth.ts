@@ -24,6 +24,7 @@ const SESSION_KEY = "ensaya-ia-session";
 const PROFILE_KEY = "ensaya-ia-profiles";
 const AUTH_EVENT = "ensaya-ia-auth";
 const MIGRATED_KEY = "ensaya-ia-idb-migrated";
+/** Claves legacy solo para migracion; el producto es Ensaya IA. */
 const LEGACY_USERS_KEY = "cine-estrella-users";
 const LEGACY_SESSION_KEY = "cine-estrella-session";
 const LEGACY_PROFILE_KEY = "cine-estrella-profiles";
@@ -138,38 +139,61 @@ function storedFromProfile(profile: PerfilUsuarioRecord): StoredProfile {
   };
 }
 
+async function scrubPlaintextUserStores() {
+  // Nunca deben quedar contraseñas en texto plano en localStorage (claves actuales ni LEGACY_*).
+  removeKey(localStorage, USERS_KEY);
+  removeKey(localStorage, LEGACY_USERS_KEY);
+}
+
 async function migrateLegacyUsers() {
   if (!canUseBrowserStorage()) return;
-  if (localStorage.getItem(MIGRATED_KEY) === "1" || localStorage.getItem(LEGACY_MIGRATED_KEY) === "1") {
+
+  const alreadyMigrated =
+    localStorage.getItem(MIGRATED_KEY) === "1" || localStorage.getItem(LEGACY_MIGRATED_KEY) === "1";
+
+  if (!alreadyMigrated) {
+    // Lectura puntual sin re-copiar el blob legado a ensaya-ia-users.
+    let legacy: LocalAccount[] = [];
+    try {
+      const raw =
+        localStorage.getItem(USERS_KEY) ?? localStorage.getItem(LEGACY_USERS_KEY) ?? null;
+      if (raw) legacy = JSON.parse(raw) as LocalAccount[];
+    } catch {
+      legacy = [];
+    }
+    for (const item of legacy) {
+      if (!item?.email || !item.password) continue;
+      const exists = await findUserByEmail(item.email);
+      if (exists) continue;
+      const hashed = await hashNewPassword(item.password);
+      const createdAt = item.createdAt || new Date().toISOString();
+      await insertUser({
+        id: item.id || `local-${crypto.randomUUID()}`,
+        email: item.email,
+        displayName: item.displayName || item.email.split("@")[0] || "Actor",
+        createdAt,
+        ...hashed,
+      });
+      const local = loadLocalProfile(item.id);
+      await upsertProfile(
+        local
+          ? storedFromProfile(local)
+          : defaultStoredProfile({
+              id: item.id,
+              email: item.email,
+              displayName: item.displayName,
+              createdAt,
+            }),
+      );
+    }
     localStorage.setItem(MIGRATED_KEY, "1");
-    return;
   }
-  const legacy = readJson<LocalAccount[]>(localStorage, USERS_KEY, [], [LEGACY_USERS_KEY]);
-  for (const item of legacy) {
-    const exists = await findUserByEmail(item.email);
-    if (exists) continue;
-    const hashed = await hashNewPassword(item.password);
-    const createdAt = item.createdAt || new Date().toISOString();
-    await insertUser({
-      id: item.id,
-      email: item.email,
-      displayName: item.displayName,
-      createdAt,
-      ...hashed,
-    });
-    const local = loadLocalProfile(item.id);
-    await upsertProfile(
-      local
-        ? storedFromProfile(local)
-        : defaultStoredProfile({
-            id: item.id,
-            email: item.email,
-            displayName: item.displayName,
-            createdAt,
-          }),
-    );
-  }
-  localStorage.setItem(MIGRATED_KEY, "1");
+
+  scrubPlaintextUserStores();
+}
+
+export async function ensureLocalAuthReady() {
+  await migrateLegacyUsers();
 }
 
 export async function registerLocalAccount({

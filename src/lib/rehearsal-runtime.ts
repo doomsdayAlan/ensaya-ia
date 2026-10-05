@@ -1,5 +1,6 @@
 import { DEMO_JULIETA_ID, DEMO_ROMEO_ID, DEMO_SCENE_ID, DEMO_SCRIPT_ID, getDemoScriptSetup } from "@/lib/demo-script";
 import { canUseBrowserStorage, readJson, removeKey, withTimeout, writeJson } from "@/lib/browser";
+import { getLocalAuthUser } from "@/lib/local-auth";
 import {
   getScriptSetup,
   getScripts,
@@ -13,6 +14,7 @@ import {
 const ACTIVE_KEY = "ensaya-ia-active-rehearsal";
 const REPORT_KEY = "ensaya-ia-last-report";
 const HISTORY_KEY = "ensaya-ia-rehearsal-history";
+/** Claves legacy solo para migracion; el producto es Ensaya IA. */
 const LEGACY_ACTIVE_KEY = "cine-estrella-active-rehearsal";
 const LEGACY_REPORT_KEY = "cine-estrella-last-report";
 const LEGACY_HISTORY_KEY = "cine-estrella-rehearsal-history";
@@ -92,12 +94,55 @@ function readHistory() {
 }
 
 export function listLocalHistory(limit = 10): RehearsalSummary[] {
-  return readHistory().slice(0, limit);
+  const userId = getLocalAuthUser()?.id ?? null;
+  const rows = readHistory().filter((row) => {
+    if (!userId) return false;
+    // Entradas viejas sin user_id: no se muestran a otros; solo al usuario actual si coincide al re-guardar.
+    return row.user_id === userId;
+  });
+  return rows.slice(0, limit);
+}
+
+/** Busca una entrada del historial local por id (del usuario actual). */
+export function getLocalHistoryById(id: string): RehearsalSummary | null {
+  if (!id) return null;
+  return listLocalHistory(HISTORY_LIMIT).find((row) => row.id === id) ?? null;
+}
+
+/** Convierte un resumen de historial a reporte local y lo deja en sessionStorage. */
+export function loadReportFromHistoryId(id: string): LocalRehearsalReport | null {
+  const row = getLocalHistoryById(id);
+  if (!row) return null;
+  const report: LocalRehearsalReport = {
+    scriptTitle: row.script?.title ?? "Sin libreto",
+    sceneTitle: row.scene?.title ?? "Sin escena",
+    sceneLocation: row.scene?.location ?? row.scene?.description ?? null,
+    characterName: row.selectedCharacter?.name ?? "Actor",
+    mode: row.mode,
+    aiDifficulty: row.ai_difficulty,
+    startedAt: row.started_at,
+    endedAt: row.ended_at ?? row.updated_at,
+    completedLines: row.completed_lines,
+    totalLines: row.total_lines,
+    skippedLines: row.skipped_lines,
+    repeatedLines: row.repeated_lines,
+    memorization: row.memorization_score,
+    clarity: row.clarity_score,
+    expression: row.expression_score,
+    rhythm: row.rhythm_score,
+    projection: row.projection_score,
+    score: row.score ?? 0,
+    feedback: row.feedback_summary ?? "Sin retroalimentacion guardada.",
+    feedbackSource: "history",
+  };
+  writeJson(sessionStorage, REPORT_KEY, report);
+  return report;
 }
 
 function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContext) {
   if (!canUseBrowserStorage()) return;
   const now = new Date().toISOString();
+  const userId = getLocalAuthUser()?.id ?? null;
   const scriptId = context?.scriptId ?? context?.script?.id ?? "local-script-unknown";
   const sceneId = context?.sceneId ?? context?.scene?.id ?? "local-scene-unknown";
   const summary: RehearsalSummary = {
@@ -128,10 +173,10 @@ function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContex
     teleprompter_status: "stopped",
     total_lines: report.totalLines,
     updated_at: now,
-    user_id: null,
+    user_id: userId,
     script: context?.script ?? {
       id: scriptId,
-      user_id: null,
+      user_id: userId,
       title: report.scriptTitle,
       author: null,
       genre: null,
