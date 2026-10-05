@@ -20,8 +20,9 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
+import { getGrupoParaScript, isMiembroDelGrupo } from "@/lib/grupos-api";
+import { getLocalScriptSetup } from "@/lib/local-library";
 import { getDemoScriptSetup } from "@/lib/demo-script";
-import { getGrupoParaScript } from "@/lib/grupos-api";
 
 export const Route = createFileRoute("/configuracion-ensayo")({
   component: ConfigEnsayo,
@@ -82,6 +83,7 @@ function ConfigEnsayo() {
   const [improv, setImprov] = useState(true);
   const [feedback, setFeedback] = useState(true);
   const [lockedGrupoId, setLockedGrupoId] = useState<string | null>(grupoIdFromSearch ?? null);
+  const [useProfileVoiceForAll, setUseProfileVoiceForAll] = useState(false);
 
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
@@ -94,14 +96,27 @@ function ConfigEnsayo() {
     placeholderData: [getDemoScriptSetup().script!],
     staleTime: 5_000,
   });
-  const visibleScripts = (scripts || []).filter((script) => {
-    if (!script) return false;
-    return (
-      (currentUserId && script.user_id === currentUserId) ||
-      script.is_public ||
-      script.source_type === "seed"
-    );
-  });
+  const visibleScripts = (() => {
+    const base = (scripts || []).filter((script) => {
+      if (!script) return false;
+      return (
+        (currentUserId && script.user_id === currentUserId) ||
+        script.is_public ||
+        script.source_type === "seed"
+      );
+    });
+    // Libreto preseleccionado desde un grupo: mostrarlo aunque sea privado de un compañero.
+    if (scriptIdFromSearch && lockedGrupoId) {
+      const already = base.some((s) => s.id === scriptIdFromSearch);
+      if (!already) {
+        const fromCatalog = (scripts || []).find((s) => s?.id === scriptIdFromSearch);
+        const fromLocal = getLocalScriptSetup(scriptIdFromSearch)?.script ?? null;
+        const extra = fromCatalog ?? fromLocal ?? getDemoScriptSetup().script;
+        if (extra && extra.id === scriptIdFromSearch) return [extra, ...base];
+      }
+    }
+    return base;
+  })();
   const { data: setup, isLoading: setupLoading } = useQuery({
     queryKey: ["script-setup-v2", selectedScriptId, selectedSceneId],
     queryFn: () => loadScriptSetupSafe(selectedScriptId || undefined, selectedSceneId || undefined),
@@ -158,16 +173,39 @@ function ConfigEnsayo() {
   }, [setup?.characters]);
 
   useEffect(() => {
+    if (!grupoIdFromSearch || !scriptIdFromSearch) return;
+    let cancelled = false;
+    void (async () => {
+      const member = await isMiembroDelGrupo(grupoIdFromSearch);
+      if (cancelled) return;
+      if (!member) {
+        toast.error("No eres miembro de ese grupo. Se usara modo individual.");
+        setMode("individual");
+        setLockedGrupoId(null);
+        return;
+      }
+      setMode("grupo");
+      setLockedGrupoId(grupoIdFromSearch);
+      const info = await getGrupoParaScript(scriptIdFromSearch, grupoIdFromSearch);
+      if (cancelled) return;
+      if (info?.personajeId) setSelectedCharacterId(info.personajeId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [grupoIdFromSearch, scriptIdFromSearch]);
+
+  useEffect(() => {
     if (mode !== "grupo" || !selectedScriptId) return;
     let cancelled = false;
-    void getGrupoParaScript(selectedScriptId).then((info) => {
+    void getGrupoParaScript(selectedScriptId, lockedGrupoId).then((info) => {
       if (cancelled || !info?.personajeId) return;
       setSelectedCharacterId(info.personajeId);
     });
     return () => {
       cancelled = true;
     };
-  }, [mode, selectedScriptId]);
+  }, [mode, selectedScriptId, lockedGrupoId]);
 
   const saveTemplate = useMutation({
     mutationFn: () =>
@@ -200,7 +238,13 @@ function ConfigEnsayo() {
       let grupoId: string | null = lockedGrupoId;
       let characterId = selectedCharacter.id;
       if (mode === "grupo") {
-        const grupoInfo = await getGrupoParaScript(setup.script.id);
+        if (lockedGrupoId) {
+          const member = await isMiembroDelGrupo(lockedGrupoId);
+          if (!member) {
+            throw new Error("No eres miembro de ese grupo.");
+          }
+        }
+        const grupoInfo = await getGrupoParaScript(setup.script.id, lockedGrupoId);
         if (lockedGrupoId) {
           grupoId = lockedGrupoId;
         } else if (grupoInfo?.grupoId) {
@@ -226,6 +270,7 @@ function ConfigEnsayo() {
         totalLines: setup.lines.length,
         source: setup.script.id.startsWith("00000000-0000-4000-8000") ? "demo" : "supabase",
         grupoId,
+        useProfileVoiceForAll,
       });
     },
     onSuccess: (active) => {
@@ -429,6 +474,12 @@ function ConfigEnsayo() {
                 desc="Gemini redacta notas de director al terminar. Si no hay clave, se usan notas locales."
                 on={feedback}
                 onChange={setFeedback}
+              />
+              <ToggleRow
+                label="Usar mi voz del perfil para todos"
+                desc="Por defecto la voz del perfil es solo del director/lector; activalo para que todos los personajes la usen."
+                on={useProfileVoiceForAll}
+                onChange={setUseProfileVoiceForAll}
               />
             </Section>
           </div>

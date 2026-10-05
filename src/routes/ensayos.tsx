@@ -69,9 +69,11 @@ function Ensayos() {
                 {rehearsal.scene?.title ?? "Sin escena"}
               </span>
               <div className="text-right">
-                <div className="text-xs text-muted-foreground">Puntuacion</div>
+                <div className="text-xs text-muted-foreground">
+                  {rehearsal.mode === "lectura" ? "Modo" : "Puntuacion"}
+                </div>
                 <div className="font-display text-lg text-primary">
-                  {formatScore(rehearsal.score)}
+                  {rehearsal.mode === "lectura" ? "Lectura" : formatScore(rehearsal.score)}
                 </div>
               </div>
               <Link

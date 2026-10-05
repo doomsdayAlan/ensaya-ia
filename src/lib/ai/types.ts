@@ -11,6 +11,8 @@ export type RehearsalFeedbackInput = {
   total: number;
   skipped: number;
   difficulty: number;
+  /** Si es "lectura", el prompt no debe evaluar memorizacion. */
+  mode?: string;
 };
 
 export type RehearsalFeedbackResult = {

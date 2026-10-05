@@ -13,8 +13,21 @@ export function feedbackSystemPrompt() {
 export function feedbackUserPrompt(input: RehearsalFeedbackInput) {
   const difficulty =
     input.difficulty < 33 ? "facil" : input.difficulty < 66 ? "media" : "alta";
+  const isLectura = (input.mode ?? "").toLowerCase() === "lectura";
+
   // scriptTitle / sceneTitle / characterName son contexto explicito enviado al LLM
   // (ademas de las metricas de completado, omisiones y memorizacion).
+  if (isLectura) {
+    return [
+      `Modo: lectura (sin evaluacion de memorizacion).`,
+      `Obra: ${input.scriptTitle}.`,
+      `Escena: ${input.sceneTitle}.`,
+      `Personaje del actor: ${input.characterName}.`,
+      `Lineas reproducidas: ${input.completed} de ${input.total}.`,
+      "Redacta una nota breve de acompanamiento a la lectura, sin puntuar ni criticar la memorizacion.",
+    ].join(" ");
+  }
+
   return [
     `Obra: ${input.scriptTitle}.`,
     `Escena: ${input.sceneTitle}.`,

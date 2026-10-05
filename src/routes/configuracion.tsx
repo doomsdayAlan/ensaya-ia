@@ -134,7 +134,7 @@ function Configuracion() {
             <div className="grid sm:grid-cols-2 gap-4">
               <SelectBlock
                 icon={Volume2}
-                title="Voz predeterminada"
+                title="Voz del director / lector"
                 value={preferredVoice}
                 options={VOICES.map((voice) => [voice, voice] as const)}
                 onChange={setPreferredVoice}

@@ -83,22 +83,24 @@ export function emotionProsody(emotion?: string | null): { rate: number; pitch: 
   if (/trist|melanc|dolor|llor|pena/.test(e)) return { rate: 0.86, pitch: 0.82 };
   if (/enoj|ira|rabia|fur|molest/.test(e)) return { rate: 1.12, pitch: 0.88 };
   if (/mied|temor|ansie|nerv|preocup/.test(e)) return { rate: 1.06, pitch: 1.22 };
-  if (/amor|ternur|carin|cariñ/.test(e)) return { rate: 0.92, pitch: 1.08 };
+  if (/romant|amor|ternur|carin|cariñ|pasion|pasión|enamor/.test(e)) return { rate: 0.9, pitch: 1.12 };
   if (/calma|seren|neut|tranquil/.test(e)) return { rate: 0.94, pitch: 1 };
   return { rate: 0.96, pitch: 1 };
 }
 
 /**
- * Perfil preferred_voice gana sobre voz auto del personaje.
- * characterVoiceManual: solo si el usuario asigno voz a mano (cuando exista esa UI).
+ * Voz del perfil: solo por defecto para director/lector, o para todos si useProfileVoiceForAll.
+ * Los personajes conservan character.voice salvo ese override.
  */
 export function resolveRehearsalVoice(options: {
   preferredVoice?: string | null;
   characterVoice?: string | null;
-  characterVoiceManual?: boolean;
+  useProfileVoiceForAll?: boolean;
+  /** true = voz del director / lector virtual (usa perfil). */
+  forDirector?: boolean;
 }) {
-  if (options.characterVoiceManual && options.characterVoice) return options.characterVoice;
-  if (options.preferredVoice) return options.preferredVoice;
+  if (options.forDirector) return options.preferredVoice ?? null;
+  if (options.useProfileVoiceForAll && options.preferredVoice) return options.preferredVoice;
   return options.characterVoice ?? null;
 }
 

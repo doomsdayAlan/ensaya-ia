@@ -77,6 +77,8 @@ function Ensayo() {
   const skippedRef = useRef(0);
   const repeatedRef = useRef(0);
   const failedLineIdRef = useRef<string | null>(null);
+  const finalEvalTimerRef = useRef<number | null>(null);
+  const accumulatedFinalRef = useRef("");
 
   const [activeConfig, setActiveConfig] = useState<ActiveRehearsal | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -133,6 +135,7 @@ function Ensayo() {
   const isGrupoMode = mode === "grupo";
   const isLecturaMode = mode === "lectura";
   const grupoId = activeConfig?.grupoId ?? null;
+  const useProfileVoiceForAll = activeConfig?.useProfileVoiceForAll ?? false;
   const total = lines.length || latest?.total_lines || 1;
   const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
@@ -290,6 +293,11 @@ function Ensayo() {
   };
 
   const stopListen = () => {
+    if (finalEvalTimerRef.current != null) {
+      window.clearTimeout(finalEvalTimerRef.current);
+      finalEvalTimerRef.current = null;
+    }
+    accumulatedFinalRef.current = "";
     listenRef.current?.stop();
     listenRef.current = null;
     setIsListening(false);
@@ -336,7 +344,8 @@ function Ensayo() {
         });
     let feedback = fallbackFeedback;
     let feedbackSource = "template";
-    const wantsAiNotes = activeConfig?.feedbackEnabled !== false;
+    // Lectura: no pedir notas de director al modelo (no hay memorizacion que evaluar).
+    const wantsAiNotes = !isLectura && activeConfig?.feedbackEnabled !== false;
     if (wantsAiNotes) {
       try {
         const notes = await requestRehearsalFeedback({
@@ -349,6 +358,7 @@ function Ensayo() {
             total: lines.length,
             skipped,
             difficulty,
+            mode,
           },
         });
         if (notes?.text) {
@@ -361,38 +371,47 @@ function Ensayo() {
       }
     }
 
-    saveLocalReport(
-      {
-        scriptTitle: setup?.script?.title ?? "Sin libreto",
-        sceneTitle: setup?.scene?.title ?? "Sin escena",
-        sceneLocation: setup?.scene?.location ?? setup?.scene?.description ?? null,
-        characterName: selectedCharacter?.name ?? "Actor",
-        mode,
-        aiDifficulty: difficulty,
-        startedAt: activeConfig?.startedAt ?? latest?.started_at ?? endedAt,
-        endedAt,
-        completedLines,
-        totalLines: lines.length,
-        skippedLines: skipped,
-        repeatedLines: repeated,
-        memorization,
-        clarity,
-        expression,
-        rhythm,
-        projection,
-        score,
-        feedback,
-        feedbackSource,
-      },
-      {
-        script: setup?.script ?? null,
-        scene: setup?.scene ?? null,
-        selectedCharacter,
-        scriptId: activeConfig?.scriptId ?? setup?.script?.id ?? null,
-        sceneId: activeConfig?.sceneId ?? setup?.scene?.id ?? null,
-        characterId: selectedCharacterId,
-      },
-    );
+    try {
+      saveLocalReport(
+        {
+          scriptTitle: setup?.script?.title ?? "Sin libreto",
+          sceneTitle: setup?.scene?.title ?? "Sin escena",
+          sceneLocation: setup?.scene?.location ?? setup?.scene?.description ?? null,
+          characterName: selectedCharacter?.name ?? "Actor",
+          mode,
+          aiDifficulty: difficulty,
+          startedAt: activeConfig?.startedAt ?? latest?.started_at ?? endedAt,
+          endedAt,
+          completedLines,
+          totalLines: lines.length,
+          skippedLines: skipped,
+          repeatedLines: repeated,
+          memorization,
+          clarity,
+          expression,
+          rhythm,
+          projection,
+          score,
+          feedback,
+          feedbackSource,
+        },
+        {
+          script: setup?.script ?? null,
+          scene: setup?.scene ?? null,
+          selectedCharacter,
+          scriptId: activeConfig?.scriptId ?? setup?.script?.id ?? null,
+          sceneId: activeConfig?.sceneId ?? setup?.scene?.id ?? null,
+          characterId: selectedCharacterId,
+        },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/quota|almacenamiento|storage|QuotaExceeded/i.test(message)) {
+        toast.error(message);
+      } else {
+        toast.error("No se pudo guardar el historial; el resumen se muestra igual.");
+      }
+    }
 
     if (activeConfig?.supabaseSessionId) {
       void updateRehearsalSession(activeConfig.supabaseSessionId, {
@@ -499,6 +518,7 @@ function Ensayo() {
       const voice = resolveRehearsalVoice({
         preferredVoice,
         characterVoice: character?.voice,
+        useProfileVoiceForAll,
       });
       void speakLine(currentLine.text, voice, {
         emotion: character?.base_emotion,
@@ -532,14 +552,25 @@ function Ensayo() {
       setConnectionStatus("Tu turno. Di la linea en voz alta.");
       stopListen();
       void startTake();
+      accumulatedFinalRef.current = "";
       const handle = listenForLine({
         onTranscript: (text, isFinal) => {
-          // Interinos solo actualizan el teleprompter; no cuentan como intento/repeticion.
+          // Interinos solo actualizan el teleprompter.
           if (!isFinal) {
             setTranscript(text);
             return;
           }
-          applySpokenText(text);
+          // Acumula pedazos finales de la misma linea y evalua tras una pausa,
+          // para no contar cada fragmento de una linea larga como repeticion.
+          accumulatedFinalRef.current = text;
+          setTranscript(text);
+          if (finalEvalTimerRef.current != null) {
+            window.clearTimeout(finalEvalTimerRef.current);
+          }
+          finalEvalTimerRef.current = window.setTimeout(() => {
+            finalEvalTimerRef.current = null;
+            applySpokenText(accumulatedFinalRef.current);
+          }, 750);
         },
         onError: (message) => {
           setConnectionStatus(message);
@@ -549,6 +580,10 @@ function Ensayo() {
       listenRef.current = handle;
       setIsListening(Boolean(handle));
       return () => {
+        if (finalEvalTimerRef.current != null) {
+          window.clearTimeout(finalEvalTimerRef.current);
+          finalEvalTimerRef.current = null;
+        }
         handle?.stop();
       };
     }
@@ -570,6 +605,7 @@ function Ensayo() {
     const voice = resolveRehearsalVoice({
       preferredVoice,
       characterVoice: character?.voice,
+      useProfileVoiceForAll,
     });
     const playback = savedUrl
       ? playAudioUrl(savedUrl)
@@ -596,7 +632,7 @@ function Ensayo() {
       stopSpeaking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn, isLecturaMode, preferredVoice, suggestEmotions]);
+  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn, isLecturaMode, preferredVoice, suggestEmotions, useProfileVoiceForAll]);
 
   useEffect(() => {
     return () => {

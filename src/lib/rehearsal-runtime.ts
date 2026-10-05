@@ -31,6 +31,8 @@ export type ActiveRehearsal = {
   source: "supabase" | "demo";
   /** Presente en modo grupo: id del grupo local asociado al libreto. */
   grupoId?: string | null;
+  /** Si true, todas las lineas TTS usan preferred_voice del perfil. */
+  useProfileVoiceForAll?: boolean;
 };
 
 export type LocalRehearsalReport = {
@@ -78,8 +80,18 @@ export function clearActiveRehearsal() {
 }
 
 export function saveLocalReport(report: LocalRehearsalReport, context?: ReportContext) {
-  writeJson(sessionStorage, REPORT_KEY, report);
-  appendLocalHistory(report, context);
+  // El resumen en sessionStorage debe sobrevivir aunque el historial no quepa.
+  try {
+    writeJson(sessionStorage, REPORT_KEY, report);
+  } catch (error) {
+    console.warn("[Ensaya IA] No se pudo guardar el reporte en sessionStorage:", error);
+  }
+  try {
+    appendLocalHistory(report, context);
+  } catch (error) {
+    console.warn("[Ensaya IA] No se pudo guardar el historial:", error);
+    throw error;
+  }
 }
 
 export function loadLocalReport(): LocalRehearsalReport | null {
@@ -244,6 +256,7 @@ export async function startLocalRehearsal(draft: {
   totalLines: number;
   source: "supabase" | "demo";
   grupoId?: string | null;
+  useProfileVoiceForAll?: boolean;
 }) {
   const active: ActiveRehearsal = {
     scriptId: draft.scriptId,
@@ -258,6 +271,7 @@ export async function startLocalRehearsal(draft: {
     startedAt: new Date().toISOString(),
     source: draft.source,
     grupoId: draft.grupoId ?? null,
+    useProfileVoiceForAll: draft.useProfileVoiceForAll ?? false,
   };
   saveActiveRehearsal(active);
   return active;

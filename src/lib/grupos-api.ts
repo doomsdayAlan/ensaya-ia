@@ -388,16 +388,36 @@ export type GrupoParaScript = {
   asignaciones: Record<string, GrupoAsignacion>;
 };
 
-export async function getGrupoParaScript(scriptId: string): Promise<GrupoParaScript | null> {
+export async function getGrupoParaScript(
+  scriptId: string,
+  grupoId?: string | null,
+): Promise<GrupoParaScript | null> {
   const userId = await getCurrentUserId();
   if (!userId) return null;
   const store = readStore();
-  const lib = store.libretos.find((item) => item.script_id === scriptId);
-  if (!lib) return null;
-  const me = store.miembros.find((item) => item.grupo_id === lib.grupo_id && item.user_id === userId);
+
+  let targetGrupoId = grupoId ?? null;
+  if (!targetGrupoId) {
+    // Sin grupo explicito: primer grupo donde el usuario es miembro y el libreto esta.
+    const libs = store.libretos.filter((item) => item.script_id === scriptId);
+    const match = libs.find((lib) =>
+      store.miembros.some((m) => m.grupo_id === lib.grupo_id && m.user_id === userId),
+    );
+    targetGrupoId = match?.grupo_id ?? null;
+  } else {
+    const lib = store.libretos.find(
+      (item) => item.script_id === scriptId && item.grupo_id === targetGrupoId,
+    );
+    if (!lib) return null;
+  }
+
+  if (!targetGrupoId) return null;
+
+  const me = store.miembros.find((item) => item.grupo_id === targetGrupoId && item.user_id === userId);
   if (!me) return null;
+
   const asignaciones: Record<string, GrupoAsignacion> = {};
-  for (const miembro of store.miembros.filter((item) => item.grupo_id === lib.grupo_id)) {
+  for (const miembro of store.miembros.filter((item) => item.grupo_id === targetGrupoId)) {
     if (!miembro.personaje_id) continue;
     const perfil = perfilDe(miembro.user_id);
     asignaciones[miembro.personaje_id] = {
@@ -405,7 +425,15 @@ export async function getGrupoParaScript(scriptId: string): Promise<GrupoParaScr
       displayName: nombreMiembro(perfil),
     };
   }
-  return { grupoId: lib.grupo_id, personajeId: me.personaje_id, rol: me.rol, asignaciones };
+  return { grupoId: targetGrupoId, personajeId: me.personaje_id, rol: me.rol, asignaciones };
+}
+
+/** Comprueba si el usuario actual es miembro del grupo. */
+export async function isMiembroDelGrupo(grupoId: string): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+  const store = readStore();
+  return store.miembros.some((item) => item.grupo_id === grupoId && item.user_id === userId);
 }
 
 export async function getScriptDetailsForGrupo(scriptId: string, _grupoId: string): Promise<ScriptDetails> {

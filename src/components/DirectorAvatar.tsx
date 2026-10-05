@@ -1,6 +1,8 @@
 import { useEffect, useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Mic, Square, Volume2 } from "lucide-react";
-import { canUseSpeechSynthesis, speakLine, stopSpeaking } from "@/lib/rehearsal-ai";
+import { canUseSpeechSynthesis, resolveRehearsalVoice, speakLine, stopSpeaking } from "@/lib/rehearsal-ai";
+import { getPerfilUsuario } from "@/lib/rehearsal-data";
 
 /** Modos listos para escalar: hoy feedback; welcome = saludo en inicio/login. */
 export type DirectorAvatarMode = "feedback" | "welcome";
@@ -46,6 +48,15 @@ export function DirectorAvatar({
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const speechOk = canUseSpeechSynthesis();
+  const { data: profileData } = useQuery({
+    queryKey: ["perfil-usuario"],
+    queryFn: getPerfilUsuario,
+  });
+  const directorVoice =
+    resolveRehearsalVoice({
+      preferredVoice: profileData?.profile?.preferred_voice ?? null,
+      forDirector: true,
+    }) ?? "Sofia (Femenina)";
   const title = mode === "welcome" ? "Tu companero de ensayo" : "Notas del director";
   const buttonLabel = speaking
     ? "Detener"
@@ -64,7 +75,7 @@ export function DirectorAvatar({
     if (!autoSpeak || !text.trim() || !speechOk) return;
     let cancelled = false;
     setSpeaking(true);
-    void speakLine(text, "Sofia (Femenina)")
+    void speakLine(text, directorVoice)
       .catch(() => {
         if (!cancelled) setError("No se pudo reproducir la voz en este navegador.");
       })
@@ -75,7 +86,7 @@ export function DirectorAvatar({
       cancelled = true;
       stopSpeaking();
     };
-  }, [autoSpeak, text, speechOk]);
+  }, [autoSpeak, text, speechOk, directorVoice]);
 
   const toggleSpeak = () => {
     setError(null);
@@ -90,7 +101,7 @@ export function DirectorAvatar({
     }
     if (!text.trim()) return;
     setSpeaking(true);
-    void speakLine(text, "Sofia (Femenina)")
+    void speakLine(text, directorVoice)
       .catch(() => setError("No se pudo reproducir la voz en este navegador."))
       .finally(() => setSpeaking(false));
   };
