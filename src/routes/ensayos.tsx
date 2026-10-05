@@ -4,7 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { Drama, Crown, Play } from "lucide-react";
 import { formatRelativeDate, formatScore } from "@/lib/rehearsal-data";
-import { loadRecentRehearsalsSafe } from "@/lib/rehearsal-runtime";
+import { loadRecentRehearsalsSafe, loadReportFromHistoryId } from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/ensayos")({
   component: Ensayos,
@@ -76,7 +76,10 @@ function Ensayos() {
               </div>
               <Link
                 to="/finalizado"
-                search={{ id: rehearsal.id }}
+                search={{ id: rehearsal.id } as never}
+                onClick={() => {
+                  loadReportFromHistoryId(rehearsal.id);
+                }}
                 className="inline-flex items-center gap-2 text-sm border border-border rounded-lg px-3 py-1.5 hover:border-primary/40 hover:text-primary"
               >
                 Ver reporte <Play className="w-3 h-3" />

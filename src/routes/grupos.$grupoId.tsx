@@ -663,7 +663,7 @@ function GrupoDetallePage() {
                 {detalle.libretos[0]?.script_id ? (
                   <Link
                     to="/configuracion-ensayo"
-                    search={{ scriptId: detalle.libretos[0].script_id }}
+                    search={{ scriptId: detalle.libretos[0].script_id } as never}
                     className="inline-flex items-center gap-2 bg-primary-gradient text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium shadow-glow hover:scale-[1.02] transition"
                   >
                     <Play className="w-4 h-4" /> Ensayar libreto

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BookOpen,
   Calendar,
@@ -32,15 +32,29 @@ import {
 } from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/finalizado")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    id: typeof search.id === "string" && search.id.length > 0 ? search.id : undefined,
-  }),
   component: Finalizado,
 });
 
+function readSearchParam(search: unknown, key: string): string | undefined {
+  if (typeof search === "string") {
+    return new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined;
+  }
+  if (search && typeof search === "object" && key in search) {
+    const value = (search as Record<string, unknown>)[key];
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
 function Finalizado() {
   const nav = useNavigate();
-  const { id: historyId } = Route.useSearch();
+  const historyId = useRouterState({
+    select: (state) =>
+      readSearchParam(state.location.search, "id") ??
+      (typeof state.location.searchStr === "string"
+        ? new URLSearchParams(state.location.searchStr).get("id") ?? undefined
+        : undefined),
+  });
   const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
   useEffect(() => {
     if (historyId) {
@@ -98,6 +112,10 @@ function Finalizado() {
     localReport?.feedback ?? report?.feedback_summary ?? "Completa un ensayo para generar retroalimentacion.";
   const skipped = localReport?.skippedLines ?? report?.skipped_lines ?? 0;
   const repeated = localReport?.repeatedLines ?? report?.repeated_lines ?? 0;
+  const highlights =
+    report && "highlights" in report && Array.isArray((report as { highlights?: unknown }).highlights)
+      ? (report as { highlights: { id: string; event_time: string; note: string }[] }).highlights
+      : [];
 
   return (
     <AppShell>
@@ -257,10 +275,7 @@ function Finalizado() {
         <div className="bg-card border border-border/60 rounded-xl p-5">
           <h3 className="font-medium mb-3">Momentos destacados</h3>
           <div className="space-y-3">
-            {(Array.isArray((report as { highlights?: { id: string; event_time: string; note: string }[] } | null)?.highlights)
-              ? (report as { highlights: { id: string; event_time: string; note: string }[] }).highlights
-              : []
-            ).map((highlight) => (
+            {highlights.map((highlight) => (
               <div key={highlight.id} className="flex items-start gap-3 text-sm">
                 <span className="text-success font-mono text-xs mt-0.5">
                   {highlight.event_time}
@@ -268,7 +283,7 @@ function Finalizado() {
                 <span className="text-foreground/90">{highlight.note}</span>
               </div>
             ))}
-            {(!report || !("highlights" in report) || !report.highlights?.length) && (
+            {highlights.length === 0 && (
               <p className="text-sm text-muted-foreground">Sin momentos destacados guardados.</p>
             )}
           </div>
