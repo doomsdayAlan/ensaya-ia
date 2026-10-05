@@ -41,7 +41,7 @@ Documentación interactiva: `http://localhost:8000/docs`
 ### Flujo A – Grabar las líneas del "otro personaje"
 
 ```
-Frontend (Lovable)                    Backend (FastAPI)
+Frontend (Ensaya IA)                  Backend (FastAPI)
 ────────────────────                  ─────────────────────────────────
 
 1. POST /script/load/file             → Extrae texto y personajes del guion
@@ -85,7 +85,7 @@ Frontend (Lovable)                    Backend (FastAPI)
 ### Flujo B – Ensayo con reproducción automática
 
 ```
-Frontend (Lovable)                    Backend (FastAPI)
+Frontend (Ensaya IA)                  Backend (FastAPI)
 ────────────────────                  ─────────────────────────────────
 
 1. (El guion ya está cargado, la sesión ya existe con grabaciones de ROMEO)
@@ -120,7 +120,7 @@ Frontend (Lovable)                    Backend (FastAPI)
 ## Nota sobre reproducción en el frontend vs. servidor
 
 El `PlaybackEngine` reproduce audio **en el servidor** (útil para desarrollo
-local o apps de escritorio). En producción con Lovable (navegador), cuando
+local o apps de escritorio). En produccion en el navegador, cuando
 recibas `playback_start` con el `character` y el `event:"segment_change"`,
 el frontend puede:
 
