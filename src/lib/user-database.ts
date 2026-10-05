@@ -3,12 +3,14 @@
  * La marca visible es Ensaya IA.
  */
 
+import { LEGACY_PBKDF2_ITERATIONS, LEGACY_STORAGE } from "@/lib/legacy-migration";
+
 export type StoredUser = {
   id: string;
   email: string;
   passwordHash: string;
   passwordSalt: string;
-  /** PBKDF2 iterations. Ausente = hash legado (12_000). */
+  /** PBKDF2 iterations. Ausente = hash legado (LEGACY_PBKDF2_ITERATIONS). */
   passwordIterations?: number;
   displayName: string;
   createdAt: string;
@@ -16,7 +18,6 @@ export type StoredUser = {
 
 /** OWASP recomendado para PBKDF2-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
-const LEGACY_PBKDF2_ITERATIONS = 12_000;
 
 export type StoredProfile = {
   user_id: string;
@@ -37,8 +38,6 @@ export type StoredProfile = {
 };
 
 const DB_NAME = "ensaya-ia-db";
-/** Nombre de IndexedDB legacy solo para migracion; el producto es Ensaya IA. */
-const LEGACY_DB_NAME = "cine-estrella-db";
 const DB_VERSION = 1;
 
 async function copyLegacyDbIfNeeded() {
@@ -56,7 +55,7 @@ async function copyLegacyDbIfNeeded() {
   if (exists) return;
 
   await new Promise<void>((resolve) => {
-    const legacy = indexedDB.open(LEGACY_DB_NAME);
+    const legacy = indexedDB.open(LEGACY_STORAGE.idbName);
     legacy.onerror = () => resolve();
     legacy.onsuccess = async () => {
       const oldDb = legacy.result;

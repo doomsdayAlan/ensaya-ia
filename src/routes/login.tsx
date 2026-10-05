@@ -106,7 +106,7 @@ function Login() {
 
         <DemoAccountButton />
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Demo: {`demo@ensayaia.local`} · contraseña {`ensayo123`}
+          Demo: {`demo@ensaya-ia.local`} · contraseña {`ensayo123`}
         </p>
       </form>
     </AuthShell>

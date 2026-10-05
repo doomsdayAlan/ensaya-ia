@@ -5,6 +5,7 @@ import type { PerfilUsuarioRecord } from "@/lib/rehearsal-data";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { duplicateLocalSetup, listLocalScripts } from "@/lib/local-library";
 import { canUseBrowserStorage, readJson, removeKey, writeJson } from "@/lib/browser";
+import { LEGACY_DEMO_EMAILS, LEGACY_STORAGE } from "@/lib/legacy-migration";
 import {
   countUsers,
   defaultStoredProfile,
@@ -24,23 +25,19 @@ const SESSION_KEY = "ensaya-ia-session";
 const PROFILE_KEY = "ensaya-ia-profiles";
 const AUTH_EVENT = "ensaya-ia-auth";
 const MIGRATED_KEY = "ensaya-ia-idb-migrated";
-/** Claves legacy solo para migracion; el producto es Ensaya IA. */
-const LEGACY_USERS_KEY = "cine-estrella-users";
-const LEGACY_SESSION_KEY = "cine-estrella-session";
-const LEGACY_PROFILE_KEY = "cine-estrella-profiles";
-const LEGACY_MIGRATED_KEY = "cine-estrella-idb-migrated";
 
 export const DEMO_ACCOUNT = {
-  email: "demo@ensayaia.local",
+  email: "demo@ensaya-ia.local",
   password: "ensayo123",
   displayName: "Cuenta demo",
 } as const;
 
-const LEGACY_DEMO_EMAIL = "demo@cineestrella.local";
-
 export function isDemoEmail(email: string) {
   const normalized = email.trim().toLowerCase();
-  return normalized === DEMO_ACCOUNT.email || normalized === LEGACY_DEMO_EMAIL;
+  return (
+    normalized === DEMO_ACCOUNT.email ||
+    (LEGACY_DEMO_EMAILS as readonly string[]).includes(normalized)
+  );
 }
 
 export type LocalAccount = {
@@ -90,7 +87,7 @@ function persistSession(session: SessionRecord) {
 }
 
 export function getLocalAuthUser(): LocalAuthUser | null {
-  const session = readJson<SessionRecord | null>(localStorage, SESSION_KEY, null, [LEGACY_SESSION_KEY]);
+  const session = readJson<SessionRecord | null>(localStorage, SESSION_KEY, null, [LEGACY_STORAGE.session]);
   if (!session?.userId || !session.email) return null;
   return toAuthUser(session);
 }
@@ -142,21 +139,21 @@ function storedFromProfile(profile: PerfilUsuarioRecord): StoredProfile {
 async function scrubPlaintextUserStores() {
   // Nunca deben quedar contraseñas en texto plano en localStorage (claves actuales ni LEGACY_*).
   removeKey(localStorage, USERS_KEY);
-  removeKey(localStorage, LEGACY_USERS_KEY);
+  removeKey(localStorage, LEGACY_STORAGE.users);
 }
 
 async function migrateLegacyUsers() {
   if (!canUseBrowserStorage()) return;
 
   const alreadyMigrated =
-    localStorage.getItem(MIGRATED_KEY) === "1" || localStorage.getItem(LEGACY_MIGRATED_KEY) === "1";
+    localStorage.getItem(MIGRATED_KEY) === "1" || localStorage.getItem(LEGACY_STORAGE.idbMigrated) === "1";
 
   if (!alreadyMigrated) {
     // Lectura puntual sin re-copiar el blob legado a ensaya-ia-users.
     let legacy: LocalAccount[] = [];
     try {
       const raw =
-        localStorage.getItem(USERS_KEY) ?? localStorage.getItem(LEGACY_USERS_KEY) ?? null;
+        localStorage.getItem(USERS_KEY) ?? localStorage.getItem(LEGACY_STORAGE.users) ?? null;
       if (raw) legacy = JSON.parse(raw) as LocalAccount[];
     } catch {
       legacy = [];
@@ -260,7 +257,13 @@ function seedDemoScripts(userId: string) {
 /** Crea o repara la cuenta demo para que ensayo123 siempre funcione. */
 export async function enterDemoAccount() {
   await migrateLegacyUsers();
-  let account = (await findUserByEmail(DEMO_ACCOUNT.email)) ?? (await findUserByEmail(LEGACY_DEMO_EMAIL));
+  let account = await findUserByEmail(DEMO_ACCOUNT.email);
+  if (!account) {
+    for (const legacyEmail of LEGACY_DEMO_EMAILS) {
+      account = await findUserByEmail(legacyEmail);
+      if (account) break;
+    }
+  }
   const hashed = await hashNewPassword(DEMO_ACCOUNT.password);
 
   if (!account) {
@@ -313,7 +316,7 @@ export async function loginLocalAccount({ email, password }: { email: string; pa
 
 export function logoutLocalAccount() {
   removeKey(localStorage, SESSION_KEY);
-  removeKey(localStorage, LEGACY_SESSION_KEY);
+  removeKey(localStorage, LEGACY_STORAGE.session);
   emitAuth();
 }
 
@@ -328,7 +331,7 @@ export function subscribeLocalAuth(listener: () => void) {
 }
 
 function readProfiles() {
-  return readJson<Record<string, PerfilUsuarioRecord>>(localStorage, PROFILE_KEY, {}, [LEGACY_PROFILE_KEY]);
+  return readJson<Record<string, PerfilUsuarioRecord>>(localStorage, PROFILE_KEY, {}, [LEGACY_STORAGE.profiles]);
 }
 
 export function loadLocalProfile(userId: string): PerfilUsuarioRecord | null {

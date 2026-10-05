@@ -4,11 +4,10 @@
  * VITE_REQUIRE_AUTH en .env (o en el panel del hosting) es el valor por defecto.
  * El override en localStorage solo se puede cambiar en modo desarrollo.
  */
+import { LEGACY_STORAGE } from "@/lib/legacy-migration";
+
 const REQUIRE_AUTH_OVERRIDE_KEY = "ensaya-ia-require-auth";
 const REDIRECT_KEY = "ensaya-ia-post-login";
-/** Claves legacy solo para migracion; el producto es Ensaya IA. */
-const LEGACY_REQUIRE_AUTH_OVERRIDE_KEY = "cine-estrella-require-auth";
-const LEGACY_REDIRECT_KEY = "cine-estrella-post-login";
 
 export function envFlag(name: string, fallback = false) {
   const value = import.meta.env[name];
@@ -22,7 +21,7 @@ export function isAuthRequired() {
   if (typeof window !== "undefined" && import.meta.env.DEV) {
     const override =
       localStorage.getItem(REQUIRE_AUTH_OVERRIDE_KEY) ??
-      localStorage.getItem(LEGACY_REQUIRE_AUTH_OVERRIDE_KEY);
+      localStorage.getItem(LEGACY_STORAGE.requireAuth);
     if (override === "on") return true;
     if (override === "off") return false;
   }
@@ -43,8 +42,8 @@ export function rememberPostLoginPath(path: string) {
 
 export function consumePostLoginPath() {
   if (typeof window === "undefined") return "/";
-  const path = sessionStorage.getItem(REDIRECT_KEY) || sessionStorage.getItem(LEGACY_REDIRECT_KEY) || "/";
+  const path = sessionStorage.getItem(REDIRECT_KEY) || sessionStorage.getItem(LEGACY_STORAGE.postLogin) || "/";
   sessionStorage.removeItem(REDIRECT_KEY);
-  sessionStorage.removeItem(LEGACY_REDIRECT_KEY);
+  sessionStorage.removeItem(LEGACY_STORAGE.postLogin);
   return path.startsWith("/") ? path : "/";
 }
