@@ -214,6 +214,13 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
               <div className="flex items-center gap-1.5 shrink-0">
                 <Link
                   to="/configuracion-ensayo"
+                  search={
+                    {
+                      scriptId: lib.script_id,
+                      mode: "grupo",
+                      grupoId: detalle.grupo.id,
+                    } as never
+                  }
                   className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition"
                 >
                   Ensayar libreto
@@ -663,7 +670,13 @@ function GrupoDetallePage() {
                 {detalle.libretos[0]?.script_id ? (
                   <Link
                     to="/configuracion-ensayo"
-                    search={{ scriptId: detalle.libretos[0].script_id } as never}
+                    search={
+                      {
+                        scriptId: detalle.libretos[0].script_id,
+                        mode: "grupo",
+                        grupoId: detalle.grupo.id,
+                      } as never
+                    }
                     className="inline-flex items-center gap-2 bg-primary-gradient text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium shadow-glow hover:scale-[1.02] transition"
                   >
                     <Play className="w-4 h-4" /> Ensayar libreto
@@ -671,6 +684,7 @@ function GrupoDetallePage() {
                 ) : (
                   <Link
                     to="/configuracion-ensayo"
+                    search={{ mode: "grupo", grupoId: detalle.grupo.id } as never}
                     className="inline-flex items-center gap-2 border border-border/60 bg-surface rounded-lg px-4 py-2 text-sm font-medium hover:border-primary/40 transition"
                   >
                     <Play className="w-4 h-4" /> Ensayar libreto

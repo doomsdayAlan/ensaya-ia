@@ -6,6 +6,7 @@ import { getCurrentUserId, getScriptDetails, type ScriptDetails } from "@/lib/re
 import { getLocalAuthUser, loadLocalProfile } from "@/lib/local-auth";
 import { listLocalScripts } from "@/lib/local-library";
 import { canUseBrowserStorage, readJson, writeJson } from "@/lib/browser";
+import { LEGACY_STORAGE } from "@/lib/legacy-migration";
 import {
   deleteGrabacionById,
   deleteGrabacionesByGrupo,
@@ -90,8 +91,6 @@ type Store = {
 };
 
 const STORE_KEY = "ensaya-ia-grupos";
-/** Clave legacy solo para migracion; el producto es Ensaya IA. */
-const LEGACY_STORE_KEY = "cine-estrella-grupos";
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function emptyStore(): Store {
@@ -99,7 +98,7 @@ function emptyStore(): Store {
 }
 
 function readStore(): Store {
-  return readJson<Store>(localStorage, STORE_KEY, emptyStore(), [LEGACY_STORE_KEY]);
+  return readJson<Store>(localStorage, STORE_KEY, emptyStore(), [LEGACY_STORAGE.grupos]);
 }
 
 function writeStore(store: Store) {
@@ -343,6 +342,9 @@ export async function removeLibretoDelGrupo(grupoId: string, scriptId: string) {
 export async function publicarAnuncio(grupoId: string, contenido: string) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
+  const store = readStore();
+  const me = store.miembros.find((item) => item.grupo_id === grupoId && item.user_id === userId);
+  if (!me) throw new Error("Debes ser miembro del grupo para publicar anuncios.");
   const anuncio: GrupoAnuncioRecord = {
     id: crypto.randomUUID(),
     grupo_id: grupoId,
@@ -350,7 +352,6 @@ export async function publicarAnuncio(grupoId: string, contenido: string) {
     contenido: contenido.trim(),
     created_at: new Date().toISOString(),
   };
-  const store = readStore();
   store.anuncios.unshift(anuncio);
   writeStore(store);
   return anuncio;

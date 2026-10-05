@@ -46,43 +46,61 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+function readSearchParam(search: unknown, searchStr: string | undefined, key: string): string | undefined {
+  if (typeof search === "string") {
+    return new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined;
+  }
+  if (search && typeof search === "object" && key in search) {
+    const value = (search as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  if (typeof searchStr === "string") {
+    return new URLSearchParams(searchStr).get(key) ?? undefined;
+  }
+  return undefined;
+}
+
 function ConfigEnsayo() {
   const nav = useNavigate();
-  const scriptIdFromSearch = useRouterState({
-    select: (state) => {
-      const search = state.location.search;
-      if (typeof search === "string") {
-        return new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get("scriptId") ?? undefined;
-      }
-      if (search && typeof search === "object" && "scriptId" in search) {
-        const value = (search as { scriptId?: unknown }).scriptId;
-        if (typeof value === "string" && value.length > 0) return value;
-      }
-      if (typeof state.location.searchStr === "string") {
-        return new URLSearchParams(state.location.searchStr).get("scriptId") ?? undefined;
-      }
-      return undefined;
-    },
+  const searchParams = useRouterState({
+    select: (state) => ({
+      scriptId: readSearchParam(state.location.search, state.location.searchStr, "scriptId"),
+      grupoId: readSearchParam(state.location.search, state.location.searchStr, "grupoId"),
+      mode: readSearchParam(state.location.search, state.location.searchStr, "mode"),
+    }),
   });
+  const scriptIdFromSearch = searchParams.scriptId;
+  const grupoIdFromSearch = searchParams.grupoId;
+  const modeFromSearch = searchParams.mode;
   const queryClient = useQueryClient();
   const [selectedScriptId, setSelectedScriptId] = useState(scriptIdFromSearch ?? "");
   const [selectedSceneId, setSelectedSceneId] = useState("");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
-  const [mode, setMode] = useState("individual");
+  const [mode, setMode] = useState(modeFromSearch === "grupo" ? "grupo" : "individual");
   const [diff, setDiff] = useState(50);
   const [emo, setEmo] = useState(true);
   const [improv, setImprov] = useState(true);
   const [feedback, setFeedback] = useState(true);
+  const [lockedGrupoId, setLockedGrupoId] = useState<string | null>(grupoIdFromSearch ?? null);
 
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
     queryFn: getPerfilUsuario,
   });
+  const currentUserId = profileData?.profile?.user_id ?? null;
   const { data: scripts = [], isLoading: scriptsLoading } = useQuery({
     queryKey: ["scripts", "catalog-v2"],
     queryFn: loadScriptsSafe,
     placeholderData: [getDemoScriptSetup().script!],
     staleTime: 5_000,
+  });
+  const visibleScripts = (scripts || []).filter((script) => {
+    if (!script) return false;
+    return (
+      (currentUserId && script.user_id === currentUserId) ||
+      script.is_public ||
+      script.source_type === "seed"
+    );
   });
   const { data: setup, isLoading: setupLoading } = useQuery({
     queryKey: ["script-setup-v2", selectedScriptId, selectedSceneId],
@@ -95,22 +113,30 @@ function ConfigEnsayo() {
   useEffect(() => {
     const profile = profileData?.profile;
     if (!profile) return;
-    setMode(profile.rehearsal_mode);
+    // Si venimos del detalle de grupo, no pisar modo grupo con el perfil.
+    if (!(modeFromSearch === "grupo" || grupoIdFromSearch)) {
+      setMode(profile.rehearsal_mode);
+    }
     setDiff(profile.ai_difficulty);
     setEmo(profile.suggest_emotions);
     setImprov(profile.allow_improv);
     setFeedback(profile.feedback_enabled);
-  }, [profileData]);
+  }, [profileData, modeFromSearch, grupoIdFromSearch]);
+
+  useEffect(() => {
+    if (modeFromSearch === "grupo") setMode("grupo");
+    if (grupoIdFromSearch) setLockedGrupoId(grupoIdFromSearch);
+  }, [modeFromSearch, grupoIdFromSearch]);
 
   useEffect(() => {
     if (scriptIdFromSearch) {
       setSelectedScriptId(scriptIdFromSearch);
       return;
     }
-    if (!selectedScriptId && scripts?.length > 0 && scripts[0]) {
-      setSelectedScriptId(scripts[0].id);
+    if (!selectedScriptId && visibleScripts.length > 0 && visibleScripts[0]) {
+      setSelectedScriptId(visibleScripts[0].id);
     }
-  }, [selectedScriptId, scripts, scriptIdFromSearch]);
+  }, [selectedScriptId, visibleScripts, scriptIdFromSearch]);
 
   useEffect(() => {
     if (!setup?.scene) return;
@@ -171,17 +197,21 @@ function ConfigEnsayo() {
         throw new Error("Selecciona el personaje que vas a interpretar.");
       }
 
-      let grupoId: string | null = null;
+      let grupoId: string | null = lockedGrupoId;
       let characterId = selectedCharacter.id;
       if (mode === "grupo") {
         const grupoInfo = await getGrupoParaScript(setup.script.id);
-        if (!grupoInfo?.grupoId) {
+        if (lockedGrupoId) {
+          grupoId = lockedGrupoId;
+        } else if (grupoInfo?.grupoId) {
+          grupoId = grupoInfo.grupoId;
+        }
+        if (!grupoId) {
           throw new Error(
             "Modo grupo: anade este libreto a un grupo y asigna tu personaje en Grupos.",
           );
         }
-        grupoId = grupoInfo.grupoId;
-        if (grupoInfo.personajeId) characterId = grupoInfo.personajeId;
+        if (grupoInfo?.personajeId) characterId = grupoInfo.personajeId;
       }
 
       return startLocalRehearsal({
@@ -255,7 +285,7 @@ function ConfigEnsayo() {
                 label="Libreto"
                 value={selectedScriptId}
                 loading={scriptsLoading}
-                options={(scripts || []).filter(Boolean).map((script) => ({
+                options={visibleScripts.map((script) => ({
                   value: script.id,
                   label: script.title,
                   sub: script.author ?? "Autor desconocido",

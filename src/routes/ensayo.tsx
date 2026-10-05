@@ -30,6 +30,7 @@ import {
   evaluateSpokenLine,
   listenForLine,
   matchThreshold,
+  resolveRehearsalVoice,
   scoreRehearsal,
   speakLine,
   stopSpeaking,
@@ -305,20 +306,34 @@ function Ensayo() {
     const repeated = repeatedRef.current;
     const completedLines = Math.min(lines.length, activeLineIndex + (reason === "done" ? 1 : 0));
     const userLinesCompleted = scoresRef.current.length;
-    const { memorization, clarity, expression, rhythm, projection, score } = scoreRehearsal({
-      userLineScores: scoresRef.current,
-      skipped,
-      repeated,
-      userLinesCompleted,
-      userLinesTotal: userLinesTotal || Math.max(1, userLinesCompleted),
-    });
+    const isLectura = mode === "lectura";
+    // Modo lectura: no puntua memorizacion; se guarda como "lectura" en el historial.
+    const scored = isLectura
+      ? {
+          memorization: 0,
+          clarity: 0,
+          expression: 0,
+          rhythm: 0,
+          projection: 0,
+          score: 0,
+        }
+      : scoreRehearsal({
+          userLineScores: scoresRef.current,
+          skipped,
+          repeated,
+          userLinesCompleted,
+          userLinesTotal: userLinesTotal || Math.max(1, userLinesCompleted),
+        });
+    const { memorization, clarity, expression, rhythm, projection, score } = scored;
     const endedAt = new Date().toISOString();
-    const fallbackFeedback = buildFeedback({
-      memorization,
-      completed: completedLines,
-      total: lines.length,
-      skipped,
-    });
+    const fallbackFeedback = isLectura
+      ? "Modo lectura: se reprodujeron las lineas sin evaluar memorizacion."
+      : buildFeedback({
+          memorization,
+          completed: completedLines,
+          total: lines.length,
+          skipped,
+        });
     let feedback = fallbackFeedback;
     let feedbackSource = "template";
     const wantsAiNotes = activeConfig?.feedbackEnabled !== false;
@@ -449,6 +464,7 @@ function Ensayo() {
       })();
       return true;
     }
+    // Solo intentos finales fallidos: el segundo fallo FINAL de la misma linea = repeticion.
     if (failedLineIdRef.current === currentLine.id) {
       repeatedRef.current += 1;
     } else {
@@ -480,14 +496,19 @@ function Ensayo() {
       stopListen();
 
       let cancelled = false;
-      const voice = character?.voice || preferredVoice;
-      void speakLine(currentLine.text, voice)
+      const voice = resolveRehearsalVoice({
+        preferredVoice,
+        characterVoice: character?.voice,
+      });
+      void speakLine(currentLine.text, voice, {
+        emotion: character?.base_emotion,
+        applyEmotion: suggestEmotions,
+      })
         .then(() => {
           if (cancelled) return;
           setIsSpeaking(false);
-          // En lectura no sumamos score de IA; solo lineas de usuario cuentan como 1 (lectura completa).
-          if (isMyTurn) advance({ score: 1 });
-          else advance();
+          // Lectura: avanzar sin puntuar memorizacion.
+          advance();
         })
         .catch((error) => {
           if (cancelled) return;
@@ -512,7 +533,12 @@ function Ensayo() {
       stopListen();
       void startTake();
       const handle = listenForLine({
-        onTranscript: (text) => {
+        onTranscript: (text, isFinal) => {
+          // Interinos solo actualizan el teleprompter; no cuentan como intento/repeticion.
+          if (!isFinal) {
+            setTranscript(text);
+            return;
+          }
           applySpokenText(text);
         },
         onError: (message) => {
@@ -541,8 +567,16 @@ function Ensayo() {
     stopListen();
 
     let cancelled = false;
-    const voice = character?.voice || preferredVoice;
-    const playback = savedUrl ? playAudioUrl(savedUrl) : speakLine(currentLine.text, voice);
+    const voice = resolveRehearsalVoice({
+      preferredVoice,
+      characterVoice: character?.voice,
+    });
+    const playback = savedUrl
+      ? playAudioUrl(savedUrl)
+      : speakLine(currentLine.text, voice, {
+          emotion: character?.base_emotion,
+          applyEmotion: suggestEmotions,
+        });
 
     void playback
       .then(() => {

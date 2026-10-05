@@ -76,7 +76,37 @@ export function pickVoice(preferred?: string | null) {
   return gendered[0] ?? pool[0] ?? null;
 }
 
-export function speakLine(text: string, preferredVoice?: string | null) {
+/** rate/pitch segun emocion base del personaje (modo "sugerir emociones"). */
+export function emotionProsody(emotion?: string | null): { rate: number; pitch: number } {
+  const e = (emotion ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/aleg|felic|goz|eufor|excit/.test(e)) return { rate: 1.08, pitch: 1.18 };
+  if (/trist|melanc|dolor|llor|pena/.test(e)) return { rate: 0.86, pitch: 0.82 };
+  if (/enoj|ira|rabia|fur|molest/.test(e)) return { rate: 1.12, pitch: 0.88 };
+  if (/mied|temor|ansie|nerv|preocup/.test(e)) return { rate: 1.06, pitch: 1.22 };
+  if (/amor|ternur|carin|cariñ/.test(e)) return { rate: 0.92, pitch: 1.08 };
+  if (/calma|seren|neut|tranquil/.test(e)) return { rate: 0.94, pitch: 1 };
+  return { rate: 0.96, pitch: 1 };
+}
+
+/**
+ * Perfil preferred_voice gana sobre voz auto del personaje.
+ * characterVoiceManual: solo si el usuario asigno voz a mano (cuando exista esa UI).
+ */
+export function resolveRehearsalVoice(options: {
+  preferredVoice?: string | null;
+  characterVoice?: string | null;
+  characterVoiceManual?: boolean;
+}) {
+  if (options.characterVoiceManual && options.characterVoice) return options.characterVoice;
+  if (options.preferredVoice) return options.preferredVoice;
+  return options.characterVoice ?? null;
+}
+
+export function speakLine(
+  text: string,
+  preferredVoice?: string | null,
+  options?: { emotion?: string | null; applyEmotion?: boolean },
+) {
   if (!canUseSpeechSynthesis()) {
     return Promise.reject(new Error("Este navegador no puede hablar las lineas de IA."));
   }
@@ -84,8 +114,12 @@ export function speakLine(text: string, preferredVoice?: string | null) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = SPEECH_LOCALE;
-  utterance.rate = 0.96;
-  utterance.pitch = 1;
+  const prosody =
+    options?.applyEmotion && options.emotion
+      ? emotionProsody(options.emotion)
+      : { rate: 0.96, pitch: 1 };
+  utterance.rate = prosody.rate;
+  utterance.pitch = prosody.pitch;
   const voice = pickVoice(preferredVoice);
   if (voice) {
     utterance.voice = voice;
@@ -140,14 +174,23 @@ export function listenForLine(options: {
 
   recognition.onresult = (event) => {
     let interim = "";
+    let sawFinal = false;
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const result = event.results[i];
       if (!result) continue;
       const transcripts = collectTranscripts(result).join(" ");
-      if (result.isFinal) collected = `${collected} ${transcripts}`.trim();
-      else interim = transcripts.trim();
+      if (result.isFinal) {
+        collected = `${collected} ${transcripts}`.trim();
+        sawFinal = true;
+      } else {
+        interim = transcripts.trim();
+      }
     }
-    options.onTranscript(`${collected} ${interim}`.trim(), Boolean(collected));
+    if (sawFinal) {
+      options.onTranscript(collected, true);
+    } else {
+      options.onTranscript(`${collected} ${interim}`.trim(), false);
+    }
   };
 
   recognition.onerror = (event) => {
