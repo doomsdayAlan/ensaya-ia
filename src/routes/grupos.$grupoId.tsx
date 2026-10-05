@@ -211,15 +211,23 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
                   <p className="text-xs text-muted-foreground mt-0.5">{lib.script.author}</p>
                 )}
               </div>
-              {isAdmin && (
-                <button
-                  onClick={() => removeLibreto(lib.script_id)}
-                  className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                  title="Quitar libreto del grupo"
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Link
+                  to="/configuracion-ensayo"
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/25 hover:bg-primary/25 transition"
                 >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
+                  Ensayar libreto
+                </Link>
+                {isAdmin && (
+                  <button
+                    onClick={() => removeLibreto(lib.script_id)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                    title="Quitar libreto del grupo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {scriptCharacters.length === 0 ? (
@@ -466,14 +474,28 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
   const queryClient = useQueryClient();
   const { grupo, miRol } = detalle;
   const isAdmin = miRol === "admin";
+  const [sceneFilter, setSceneFilter] = useState<string>("todas");
 
   const { data: grabaciones = [], isLoading } = useQuery({
     queryKey: ["grupo-grabaciones", grupo.id],
     queryFn: () => listGrabacionesGrupo(grupo.id),
   });
 
+  const escenas = Array.from(
+    new Map(
+      grabaciones
+        .filter((item) => item.sceneId)
+        .map((item) => [item.sceneId!, item.sceneTitle || "Escena"]),
+    ).entries(),
+  );
+
+  const visibles =
+    sceneFilter === "todas"
+      ? grabaciones
+      : grabaciones.filter((item) => item.sceneId === sceneFilter);
+
   const { mutate: borrar, isPending } = useMutation({
-    mutationFn: (id: string) => eliminarGrabacionGrupo(id),
+    mutationFn: (id: string) => eliminarGrabacionGrupo(id, grupo.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["grupo-grabaciones", grupo.id] });
       toast.success("Grabacion eliminada.");
@@ -501,7 +523,7 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
         <p className="text-sm text-muted-foreground mb-1">Aun no hay grabaciones en este grupo.</p>
         <p className="text-xs text-muted-foreground">
           En Configurar ensayo elige modo <span className="text-foreground">En grupo</span>, interpreta tu
-          personaje y las tomas se guardan por linea para el resto del elenco.
+          personaje y las tomas se guardan por linea y por miembro.
         </p>
       </div>
     );
@@ -509,11 +531,26 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        {grabaciones.length} grabacion{grabaciones.length === 1 ? "" : "es"} · se reproducen en el ensayo
-        cuando toca esa linea de otro actor.
-      </p>
-      {grabaciones.map((item) => (
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <p className="text-xs text-muted-foreground">
+          {visibles.length} grabacion{visibles.length === 1 ? "" : "es"} · una toma por miembro y linea.
+        </p>
+        {escenas.length > 0 && (
+          <select
+            value={sceneFilter}
+            onChange={(event) => setSceneFilter(event.target.value)}
+            className="text-xs bg-surface border border-border/60 rounded-lg px-2 py-1.5"
+          >
+            <option value="todas">Todas las escenas</option>
+            {escenas.map(([id, title]) => (
+              <option key={id} value={id}>
+                {title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {visibles.map((item) => (
         <div key={item.id} className="bg-card border border-border/60 rounded-xl p-4 flex items-center gap-3">
           <button
             type="button"
@@ -524,10 +561,13 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
             <Play className="w-4 h-4 fill-current" />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium truncate">{item.characterName}</div>
+            <div className="text-sm font-medium truncate">
+              {item.characterName}
+              <span className="text-muted-foreground font-normal"> · {item.actorName}</span>
+            </div>
             <div className="text-xs text-muted-foreground truncate">
               {item.sceneTitle ? `${item.sceneTitle} · ` : ""}
-              {item.actorName} · {formatGrupoDate(item.createdAt)}
+              {formatGrupoDate(item.createdAt)}
               {item.durationSec ? ` · ${item.durationSec.toFixed(1)}s` : ""}
             </div>
           </div>
@@ -616,8 +656,26 @@ function GrupoDetallePage() {
                   </button>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground shrink-0">
-                {detalle.miembros.length}/{detalle.grupo.max_miembros} miembros
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="text-xs text-muted-foreground">
+                  {detalle.miembros.length}/{detalle.grupo.max_miembros} miembros
+                </div>
+                {detalle.libretos[0]?.script_id ? (
+                  <Link
+                    to="/configuracion-ensayo"
+                    search={{ scriptId: detalle.libretos[0].script_id }}
+                    className="inline-flex items-center gap-2 bg-primary-gradient text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium shadow-glow hover:scale-[1.02] transition"
+                  >
+                    <Play className="w-4 h-4" /> Ensayar libreto
+                  </Link>
+                ) : (
+                  <Link
+                    to="/configuracion-ensayo"
+                    className="inline-flex items-center gap-2 border border-border/60 bg-surface rounded-lg px-4 py-2 text-sm font-medium hover:border-primary/40 transition"
+                  >
+                    <Play className="w-4 h-4" /> Ensayar libreto
+                  </Link>
+                )}
               </div>
             </div>
 

@@ -1,17 +1,17 @@
 /**
  * Grabaciones de grupo en IndexedDB (audio por linea del libreto).
- * Sustituye el stub getGrabacionesGrupo del incremento 4 sin depender de Supabase.
+ * Una toma por (grupo, script, linea, usuario).
  */
 
 const DB_NAME = "ensaya-ia-grabaciones";
 const STORE = "grabaciones";
-const DB_VERSION = 1;
+/** v2: clave unica por grupo+script+linea+usuario; indice sceneId. */
+const DB_VERSION = 2;
 
 export type StoredGrupoGrabacion = {
   id: string;
   grupoId: string;
   scriptId: string;
-  /** Escena del ensayo en la que se tomo la grabacion. Ausente en tomas viejas. */
   sceneId: string | null;
   sceneTitle: string | null;
   lineId: string;
@@ -31,13 +31,30 @@ function openDb(): Promise<IDBDatabase> {
       return;
     }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
+      const oldVersion = event.oldVersion;
       if (!db.objectStoreNames.contains(STORE)) {
         const store = db.createObjectStore(STORE, { keyPath: "id" });
         store.createIndex("scriptId", "scriptId", { unique: false });
         store.createIndex("grupoId", "grupoId", { unique: false });
-        store.createIndex("scriptLine", ["scriptId", "lineId"], { unique: true });
+        store.createIndex("sceneId", "sceneId", { unique: false });
+        store.createIndex("takeKey", ["grupoId", "scriptId", "lineId", "userId"], { unique: true });
+        return;
+      }
+      const tx = request.transaction;
+      if (!tx) return;
+      const store = tx.objectStore(STORE);
+      if (oldVersion < 2) {
+        if (store.indexNames.contains("scriptLine")) {
+          store.deleteIndex("scriptLine");
+        }
+        if (!store.indexNames.contains("sceneId")) {
+          store.createIndex("sceneId", "sceneId", { unique: false });
+        }
+        if (!store.indexNames.contains("takeKey")) {
+          store.createIndex("takeKey", ["grupoId", "scriptId", "lineId", "userId"], { unique: true });
+        }
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -59,10 +76,15 @@ export async function upsertGrupoGrabacion(
   try {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
-    const index = store.index("scriptLine");
-    const existing = await requestToPromise<StoredGrupoGrabacion | undefined>(
-      index.get([input.scriptId, input.lineId]),
-    );
+    const index = store.index("takeKey");
+    let existing: StoredGrupoGrabacion | undefined;
+    try {
+      existing = await requestToPromise<StoredGrupoGrabacion | undefined>(
+        index.get([input.grupoId, input.scriptId, input.lineId, input.userId]),
+      );
+    } catch {
+      existing = undefined;
+    }
     const row: StoredGrupoGrabacion = {
       id: existing?.id ?? input.id ?? `grab-${crypto.randomUUID()}`,
       grupoId: input.grupoId,
@@ -78,7 +100,17 @@ export async function upsertGrupoGrabacion(
       createdAt: input.createdAt ?? new Date().toISOString(),
       durationSec: input.durationSec,
     };
-    await requestToPromise(store.put(row));
+    try {
+      await requestToPromise(store.put(row));
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      if (name === "QuotaExceededError" || (error instanceof Error && /quota/i.test(error.message))) {
+        throw new Error(
+          "No hay espacio suficiente en este navegador para guardar el audio. Borra grabaciones viejas o libera almacenamiento del sitio.",
+        );
+      }
+      throw error;
+    }
     return row;
   } finally {
     db.close();
@@ -137,12 +169,21 @@ export async function deleteGrabacionesByScript(scriptId: string) {
   }
 }
 
-/** Mapa lineId → object URL listo para <audio> / new Audio(). */
-export async function grabacionesMapForScript(scriptId: string): Promise<Record<string, string>> {
-  const rows = await listGrabacionesByScript(scriptId);
+/**
+ * Preferencia de reproduccion en ensayo: si hay varias tomas de la misma linea,
+ * prioriza la mas reciente (cualquier miembro).
+ */
+export async function grabacionesMapForScript(
+  scriptId: string,
+  grupoId?: string | null,
+): Promise<Record<string, string>> {
+  let rows = await listGrabacionesByScript(scriptId);
+  if (grupoId) rows = rows.filter((row) => row.grupoId === grupoId);
+  rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const urls: Record<string, string> = {};
   for (const row of rows) {
     if (row.blob && row.lineId) {
+      if (urls[row.lineId]) URL.revokeObjectURL(urls[row.lineId]);
       urls[row.lineId] = URL.createObjectURL(row.blob);
     }
   }
