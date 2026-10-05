@@ -13,6 +13,8 @@ export function feedbackSystemPrompt() {
 export function feedbackUserPrompt(input: RehearsalFeedbackInput) {
   const difficulty =
     input.difficulty < 33 ? "facil" : input.difficulty < 66 ? "media" : "alta";
+  // scriptTitle / sceneTitle / characterName son contexto explicito enviado al LLM
+  // (ademas de las metricas de completado, omisiones y memorizacion).
   return [
     `Obra: ${input.scriptTitle}.`,
     `Escena: ${input.sceneTitle}.`,

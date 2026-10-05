@@ -4,13 +4,37 @@ import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
-const NAV = [
+export const NAV = [
   { to: "/", label: "Inicio", icon: Home },
   { to: "/libretos", label: "Libretos", icon: FileText },
   { to: "/ensayos", label: "Ensayos", icon: Drama },
   { to: "/grupos", label: "Grupos", icon: Users },
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ] as const;
+
+function NavLinks({ path }: { path: string }) {
+  return (
+    <>
+      {NAV.map(({ to, label, icon: Icon }) => {
+        const active = to === "/" ? path === "/" : path.startsWith(to);
+        return (
+          <Link
+            key={to}
+            to={to}
+            className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+              active
+                ? "bg-primary/10 text-primary border-l-2 border-primary"
+                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-surface/60 border-l-2 border-transparent"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            <span>{label}</span>
+          </Link>
+        );
+      })}
+    </>
+  );
+}
 
 export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -23,24 +47,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 flex flex-col gap-1">
-        {NAV.map(({ to, label, icon: Icon }) => {
-          const active = to === "/" ? path === "/" : path.startsWith(to);
-          return (
-            <Link
-              key={to}
-              to={to}
-              className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
-                ${
-                  active
-                    ? "bg-primary/10 text-primary border-l-2 border-primary"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-surface/60 border-l-2 border-transparent"
-                }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
+        <NavLinks path={path} />
       </nav>
 
       {loading ? null : user ? (

@@ -32,7 +32,9 @@ Permite el micrófono. Configurar ensayo → Iniciar ensayo.
 
 ## Cuentas y datos
 
-Inicio de sesión obligatorio (`VITE_REQUIRE_AUTH`). Cuentas en IndexedDB (tablas `users` y `perfil_usuario`). Libretos, grupos e historial en el navegador. Las grabaciones de modo grupo viven en IndexedDB (`ensaya-ia-grabaciones`) con libreto, escena, línea y personaje, y se reproducen en el ensayo cuando toca la línea de otro actor.
+Inicio de sesión obligatorio (`VITE_REQUIRE_AUTH`). Cuentas en IndexedDB (tablas `users` y `perfil_usuario`). Libretos, grupos e historial en el navegador (separados por usuario en sesion). Las grabaciones de modo grupo viven en IndexedDB (`ensaya-ia-grabaciones`) con grupo, libreto, escena, línea, personaje y usuario; una toma por miembro; se reproducen en el ensayo cuando toca la línea de otro actor.
+
+El nombre del producto es **Ensaya IA**. Las claves de almacenamiento con prefijo `cine-estrella-*` (y la DB legacy homónima) solo existen para migrar datos antiguos; no son el nombre del producto.
 
 ## Crecimiento
 

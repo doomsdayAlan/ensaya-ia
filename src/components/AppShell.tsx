@@ -1,5 +1,6 @@
 import { Sidebar } from "./Sidebar";
 import { AuthGate } from "./AuthGate";
+import { MobileNav } from "./MobileNav";
 
 /** Layout de la app. AuthGate aplica el candado de sesion a todas estas pantallas. */
 
@@ -8,9 +9,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <AuthGate>
       <div className="min-h-screen flex bg-background text-foreground">
         <Sidebar />
-        <main className="flex-1 min-w-0 px-6 lg:px-10 py-6 lg:py-8 overflow-x-hidden">
+        <main className="flex-1 min-w-0 px-6 lg:px-10 py-6 lg:py-8 pb-24 lg:pb-8 overflow-x-hidden">
           {children}
         </main>
+        <MobileNav />
       </div>
     </AuthGate>
   );

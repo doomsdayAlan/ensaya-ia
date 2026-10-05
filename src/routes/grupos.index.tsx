@@ -316,7 +316,7 @@ function GruposList() {
         <div>
           <h1 className="font-display text-4xl">Mis Grupos</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Ensaya con otros actores en tiempo real.
+            Ensaya con otros actores en este mismo dispositivo (datos locales del navegador).
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
