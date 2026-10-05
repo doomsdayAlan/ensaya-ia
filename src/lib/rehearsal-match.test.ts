@@ -44,7 +44,13 @@ assert(accepted.accepted, `evaluateSpokenLine acepta palabras clave (${accepted.
 const rejected = evaluateSpokenLine("hola buenos dias", expected, 50);
 assert(!rejected.accepted, `evaluateSpokenLine rechaza ruido (${rejected.percent}%)`);
 
-const scored = scoreRehearsal([0.8, 0.9], 1);
+const scored = scoreRehearsal({
+  userLineScores: [0.8, 0.9],
+  skipped: 1,
+  repeated: 0,
+  userLinesCompleted: 2,
+  userLinesTotal: 2,
+});
 assert(scored.memorization === 85 && scored.score > 0, `scoreRehearsal ${JSON.stringify(scored)}`);
 
 if (failed) {

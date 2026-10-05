@@ -17,6 +17,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import {
+  getPerfilUsuario,
   updateRehearsalSession,
   type ScriptLineWithCharacter,
 } from "@/lib/rehearsal-data";
@@ -25,6 +26,7 @@ import {
   buildFeedback,
   canUseSpeechRecognition,
   canUseSpeechSynthesis,
+  effectiveMatchDifficulty,
   evaluateSpokenLine,
   listenForLine,
   matchThreshold,
@@ -72,6 +74,8 @@ function Ensayo() {
   const advancingRef = useRef(false);
   const scoresRef = useRef<number[]>([]);
   const skippedRef = useRef(0);
+  const repeatedRef = useRef(0);
+  const failedLineIdRef = useRef<string | null>(null);
 
   const [activeConfig, setActiveConfig] = useState<ActiveRehearsal | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -100,6 +104,11 @@ function Ensayo() {
     queryFn: () => loadScriptSetupSafe(scriptId, sceneId),
     placeholderData: getDemoScriptSetup(),
   });
+  const { data: profileData } = useQuery({
+    queryKey: ["perfil-usuario"],
+    queryFn: getPerfilUsuario,
+  });
+  const preferredVoice = profileData?.profile?.preferred_voice ?? null;
 
   const loading = (rehearsalLoading && !activeConfig) || setupLoading;
   const lines = useMemo(() => setup?.lines ?? [], [setup?.lines]);
@@ -116,14 +125,22 @@ function Ensayo() {
     latest?.selectedCharacter ??
     null;
   const difficulty = activeConfig?.aiDifficulty ?? latest?.ai_difficulty ?? 50;
+  const allowImprov = activeConfig?.allowImprov ?? latest?.allow_improv ?? true;
+  const suggestEmotions = activeConfig?.suggestEmotions ?? latest?.suggest_emotions ?? true;
+  const matchDifficulty = effectiveMatchDifficulty(difficulty, allowImprov);
   const mode = activeConfig?.mode ?? latest?.mode ?? "individual";
   const isGrupoMode = mode === "grupo";
+  const isLecturaMode = mode === "lectura";
   const grupoId = activeConfig?.grupoId ?? null;
   const total = lines.length || latest?.total_lines || 1;
   const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
   const isMyTurn = Boolean(currentLine && currentLine.character_id === selectedCharacterId);
   const speechOk = canUseSpeechRecognition() && canUseSpeechSynthesis();
+  const userLinesTotal = useMemo(
+    () => lines.filter((line) => line.character_id === selectedCharacterId).length,
+    [lines, selectedCharacterId],
+  );
 
   const stopTake = () => {
     const recorder = recorderRef.current;
@@ -204,14 +221,14 @@ function Ensayo() {
     });
 
   useEffect(() => {
-    const scriptId = activeConfig?.scriptId ?? latest?.script_id;
-    if (!isGrupoMode || !scriptId) {
+    const sid = activeConfig?.scriptId ?? latest?.script_id;
+    if (!isGrupoMode || !sid) {
       setGroupAudioUrls({});
       return;
     }
     let cancelled = false;
     const created: string[] = [];
-    void getGrabacionesGrupo(scriptId)
+    void getGrabacionesGrupo(sid, grupoId)
       .then((urls) => {
         if (cancelled) {
           Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
@@ -227,16 +244,16 @@ function Ensayo() {
       cancelled = true;
       created.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [isGrupoMode, activeConfig?.scriptId, latest?.script_id]);
+  }, [isGrupoMode, activeConfig?.scriptId, latest?.script_id, grupoId]);
 
   const persistGrupoTake = async (line: ScriptLineWithCharacter, blob: Blob | null) => {
     if (!isGrupoMode || !blob?.size || !line.id) return;
-    const scriptId = activeConfig?.scriptId ?? setup?.script?.id ?? latest?.script_id;
-    if (!scriptId) return;
+    const sid = activeConfig?.scriptId ?? setup?.script?.id ?? latest?.script_id;
+    if (!sid) return;
     let resolvedGrupoId = grupoId;
     if (!resolvedGrupoId) {
       try {
-        resolvedGrupoId = (await getGrupoParaScript(scriptId))?.grupoId ?? null;
+        resolvedGrupoId = (await getGrupoParaScript(sid))?.grupoId ?? null;
       } catch {
         return;
       }
@@ -245,7 +262,7 @@ function Ensayo() {
     try {
       const saved = await saveGrabacionGrupo({
         grupoId: resolvedGrupoId,
-        scriptId,
+        scriptId: sid,
         sceneId: activeConfig?.sceneId ?? setup?.scene?.id ?? latest?.scene_id ?? null,
         sceneTitle: setup?.scene?.title ?? null,
         lineId: line.id,
@@ -262,7 +279,11 @@ function Ensayo() {
         next[line.id] = saved.audioUrl;
         return next;
       });
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/quota|almacenamiento|storage|QuotaExceeded/i.test(message)) {
+        toast.error(message);
+      }
       // La toma local sigue disponible aunque no se pueda persistir.
     }
   };
@@ -281,11 +302,16 @@ function Ensayo() {
     setIsSpeaking(false);
 
     const skipped = skippedRef.current;
+    const repeated = repeatedRef.current;
     const completedLines = Math.min(lines.length, activeLineIndex + (reason === "done" ? 1 : 0));
-    const { memorization, clarity, expression, rhythm, projection, score } = scoreRehearsal(
-      scoresRef.current,
+    const userLinesCompleted = scoresRef.current.length;
+    const { memorization, clarity, expression, rhythm, projection, score } = scoreRehearsal({
+      userLineScores: scoresRef.current,
       skipped,
-    );
+      repeated,
+      userLinesCompleted,
+      userLinesTotal: userLinesTotal || Math.max(1, userLinesCompleted),
+    });
     const endedAt = new Date().toISOString();
     const fallbackFeedback = buildFeedback({
       memorization,
@@ -333,7 +359,7 @@ function Ensayo() {
         completedLines,
         totalLines: lines.length,
         skippedLines: skipped,
-        repeatedLines: 0,
+        repeatedLines: repeated,
         memorization,
         clarity,
         expression,
@@ -360,6 +386,7 @@ function Ensayo() {
         completed_lines: completedLines,
         total_lines: lines.length,
         skipped_lines: skipped,
+        repeated_lines: repeated,
         memorization_score: memorization,
         clarity_score: clarity,
         expression_score: expression,
@@ -382,6 +409,7 @@ function Ensayo() {
     stopSpeaking();
     setIsSpeaking(false);
     setTranscript("");
+    failedLineIdRef.current = null;
 
     if (opts?.skipped) skippedRef.current += 1;
     if (typeof opts?.score === "number") {
@@ -406,7 +434,7 @@ function Ensayo() {
 
   const applySpokenText = (text: string, fromTyping = false) => {
     if (!currentLine) return false;
-    const verdict = evaluateSpokenLine(text, currentLine.text, difficulty);
+    const verdict = evaluateSpokenLine(text, currentLine.text, matchDifficulty);
     setTranscript(text);
     setLastScore(verdict.score);
     if (verdict.accepted) {
@@ -421,6 +449,11 @@ function Ensayo() {
       })();
       return true;
     }
+    if (failedLineIdRef.current === currentLine.id) {
+      repeatedRef.current += 1;
+    } else {
+      failedLineIdRef.current = currentLine.id;
+    }
     if (verdict.close || fromTyping) {
       setConnectionStatus(`Casi... ${verdict.percent}%. Sigue hablando o escribe las palabras clave.`);
     }
@@ -429,6 +462,44 @@ function Ensayo() {
 
   useEffect(() => {
     if (!isRehearsing || !currentLine || advancingRef.current) return;
+
+    // Modo lectura: TTS de todas las lineas, sin exigir microfono para avanzar.
+    if (isLecturaMode) {
+      const character = currentLine.character;
+      const emotionHint =
+        suggestEmotions && character?.base_emotion
+          ? ` · emocion: ${character.base_emotion}`
+          : "";
+      setConnectionStatus(
+        isMyTurn
+          ? `Lectura: tu linea (${character?.name ?? "Tu"})${emotionHint}`
+          : `Lectura: ${character?.name ?? "IA"}${emotionHint}`,
+      );
+      setIsSpeaking(true);
+      setIsListening(false);
+      stopListen();
+
+      let cancelled = false;
+      const voice = character?.voice || preferredVoice;
+      void speakLine(currentLine.text, voice)
+        .then(() => {
+          if (cancelled) return;
+          setIsSpeaking(false);
+          // En lectura no sumamos score de IA; solo lineas de usuario cuentan como 1 (lectura completa).
+          if (isMyTurn) advance({ score: 1 });
+          else advance();
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setIsSpeaking(false);
+          setConnectionStatus(error instanceof Error ? error.message : "No se pudo leer la linea.");
+        });
+
+      return () => {
+        cancelled = true;
+        stopSpeaking();
+      };
+    }
 
     if (isMyTurn) {
       setIsSpeaking(false);
@@ -458,25 +529,27 @@ function Ensayo() {
 
     const character = currentLine.character;
     const savedUrl = isGrupoMode ? groupAudioUrls[currentLine.id] : undefined;
+    const emotionHint =
+      suggestEmotions && character?.base_emotion ? ` · emocion: ${character.base_emotion}` : "";
     setConnectionStatus(
       savedUrl
-        ? `${character?.name ?? "Actor"} (grabacion del grupo)...`
-        : `${character?.name ?? "IA"} esta interpretando su linea...`,
+        ? `${character?.name ?? "Actor"} (grabacion del grupo)${emotionHint}...`
+        : `${character?.name ?? "IA"} esta interpretando su linea${emotionHint}...`,
     );
     setIsSpeaking(true);
     setIsListening(false);
     stopListen();
 
     let cancelled = false;
-    const playback = savedUrl
-      ? playAudioUrl(savedUrl)
-      : speakLine(currentLine.text, character?.voice);
+    const voice = character?.voice || preferredVoice;
+    const playback = savedUrl ? playAudioUrl(savedUrl) : speakLine(currentLine.text, voice);
 
     void playback
       .then(() => {
         if (cancelled) return;
         setIsSpeaking(false);
-        advance({ score: 1 });
+        // Lineas de IA / otros personajes: avanzar sin empujar score 1.
+        advance();
       })
       .catch((error) => {
         if (cancelled) return;
@@ -489,7 +562,7 @@ function Ensayo() {
       stopSpeaking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn]);
+  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn, isLecturaMode, preferredVoice, suggestEmotions]);
 
   useEffect(() => {
     return () => {
@@ -499,13 +572,27 @@ function Ensayo() {
   }, []);
 
   const handleToggleRecording = () => {
+    if (isLecturaMode) {
+      if (isRehearsing) {
+        void finishRehearsal("manual");
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.speechSynthesis.getVoices();
+      }
+      setIsRehearsing(true);
+      setConnectionStatus("Lectura iniciada. Se leen todas las lineas en voz alta.");
+      toast.success("Modo lectura: sin microfono para avanzar.");
+      return;
+    }
+
     if (!speechOk) {
       toast.error("Usa Chrome o Edge en http://localhost para voz y microfono.");
     }
 
     if (isRehearsing && isMyTurn) {
-      const verdict = evaluateSpokenLine(transcript, currentLine?.text ?? "", difficulty);
-      if (verdict.score >= matchThreshold(difficulty) * 0.75) {
+      const verdict = evaluateSpokenLine(transcript, currentLine?.text ?? "", matchDifficulty);
+      if (verdict.score >= matchThreshold(matchDifficulty) * 0.75) {
         advance({ score: verdict.score });
         return;
       }
@@ -531,7 +618,7 @@ function Ensayo() {
       void finishRehearsal("done");
       return;
     }
-    advance({ skipped: isMyTurn });
+    advance({ skipped: isMyTurn && !isLecturaMode });
   };
 
   const handleSkipBackward = () => {
@@ -539,6 +626,8 @@ function Ensayo() {
     stopSpeaking();
     setIsSpeaking(false);
     setTranscript("");
+    repeatedRef.current += 1;
+    failedLineIdRef.current = null;
     setActiveLineIndex((prev) => Math.max(0, prev - 1));
   };
 
@@ -547,6 +636,8 @@ function Ensayo() {
     stopSpeaking();
     scoresRef.current = [];
     skippedRef.current = 0;
+    repeatedRef.current = 0;
+    failedLineIdRef.current = null;
     setActiveLineIndex(0);
     setTranscript("");
     setTypedLine("");
@@ -557,7 +648,7 @@ function Ensayo() {
   };
 
   const submitTypedLine = () => {
-    if (!isRehearsing || !isMyTurn || !currentLine) return;
+    if (!isRehearsing || !isMyTurn || !currentLine || isLecturaMode) return;
     const text = typedLine.trim();
     if (!text) return;
     applySpokenText(text, true);
@@ -573,7 +664,7 @@ function Ensayo() {
         </div>
       )}
 
-      {!speechOk && (
+      {!speechOk && !isLecturaMode && (
         <div className="bg-card border border-primary/40 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
           Para que la IA te escuche y hable, abre la app en Chrome o Edge. Puedes avanzar lineas a mano si el
           reconocimiento no esta disponible.
@@ -663,52 +754,68 @@ function Ensayo() {
               <ControlBtn icon={SkipBack} label="Retroceder linea" onClick={handleSkipBackward} />
               <button
                 onClick={handleToggleRecording}
-                aria-label={isRehearsing ? "Detener ensayo" : "Iniciar ensayo con microfono"}
+                aria-label={
+                  isLecturaMode
+                    ? isRehearsing
+                      ? "Detener lectura"
+                      : "Iniciar lectura"
+                    : isRehearsing
+                      ? "Detener ensayo"
+                      : "Iniciar ensayo con microfono"
+                }
                 className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 transition-all ${
                   isRehearsing
                     ? "bg-destructive text-destructive-foreground ring-destructive/20"
                     : "bg-primary-gradient text-primary-foreground ring-primary/20"
                 }`}
               >
-                {isRehearsing ? <Square className="w-5 h-5 fill-current" /> : <Mic className="w-6 h-6" />}
+                {isRehearsing ? (
+                  <Square className="w-5 h-5 fill-current" />
+                ) : isLecturaMode ? (
+                  <Play className="w-6 h-6 fill-current" />
+                ) : (
+                  <Mic className="w-6 h-6" />
+                )}
               </button>
               <ControlBtn icon={SkipForward} label="Siguiente linea" onClick={handleSkipForward} />
               <ControlBtn icon={RotateCcw} label="Reiniciar" onClick={handleReset} />
             </div>
-            <div className="w-full">
-              <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-                Microfono o escribe tu linea
-              </label>
-              <div className="mt-1 flex gap-2">
-                <input
-                  value={typedLine}
-                  disabled={!isRehearsing || !isMyTurn}
-                  onChange={(event) => setTypedLine(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      submitTypedLine();
+            {!isLecturaMode && (
+              <div className="w-full">
+                <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+                  Microfono o escribe tu linea
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={typedLine}
+                    disabled={!isRehearsing || !isMyTurn}
+                    onChange={(event) => setTypedLine(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        submitTypedLine();
+                      }
+                    }}
+                    placeholder={
+                      isRehearsing && isMyTurn
+                        ? "Di la linea o escribela aqui y pulsa Enter"
+                        : isRehearsing
+                          ? "Espera a tu turno o usa siguiente linea"
+                          : "Pulsa el microfono para empezar"
                     }
-                  }}
-                  placeholder={
-                    isRehearsing && isMyTurn
-                      ? "Di la linea o escribela aqui y pulsa Enter"
-                      : isRehearsing
-                        ? "Espera a tu turno o usa siguiente linea"
-                        : "Pulsa el microfono para empezar"
-                  }
-                  className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  disabled={!isRehearsing || !isMyTurn || !typedLine.trim()}
-                  onClick={submitTypedLine}
-                  className="inline-flex items-center gap-2 border border-primary/40 text-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
-                >
-                  Enviar
-                </button>
+                    className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    disabled={!isRehearsing || !isMyTurn || !typedLine.trim()}
+                    onClick={submitTypedLine}
+                    className="inline-flex items-center gap-2 border border-primary/40 text-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                  >
+                    Enviar
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -729,8 +836,8 @@ function Ensayo() {
           </Card>
 
           <Card title="IA en vivo">
-            <Quick label="Motor de voz" value={speechOk ? "Navegador" : "No disponible"} />
-            <Quick label="Turno actual" value={isMyTurn ? "Tu turno" : "IA habla"} />
+            <Quick label="Motor de voz" value={speechOk || isLecturaMode ? "Navegador" : "No disponible"} />
+            <Quick label="Turno actual" value={isLecturaMode ? "Lectura TTS" : isMyTurn ? "Tu turno" : "IA habla"} />
             <Quick
               label="Coincidencia"
               value={lastScore === null ? "—" : `${Math.round(lastScore * 100)}%`}
@@ -738,11 +845,13 @@ function Ensayo() {
             <div className="mt-3 rounded-lg border border-border/60 bg-surface p-3">
               <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">Estado</div>
               <p className="text-xs leading-relaxed text-foreground min-h-10">
-                {isSpeaking
-                  ? "La IA esta diciendo su linea. Cuando termine, te toca a ti."
-                  : isListening
-                    ? "Habla tu linea. La IA avanza cuando reconoce las palabras clave, aunque no sea literal."
-                    : "Pulsa el microfono para que la IA interprete los otros papeles contigo."}
+                {isLecturaMode
+                  ? "Modo lectura: se reproducen todas las lineas con la voz del navegador."
+                  : isSpeaking
+                    ? "La IA esta diciendo su linea. Cuando termine, te toca a ti."
+                    : isListening
+                      ? "Habla tu linea. La IA avanza cuando reconoce las palabras clave, aunque no sea literal."
+                      : "Pulsa el microfono para que la IA interprete los otros papeles contigo."}
               </p>
             </div>
           </Card>

@@ -47,6 +47,7 @@ export function canUseSpeechSynthesis() {
 
 export {
   buildFeedback,
+  effectiveMatchDifficulty,
   evaluateSpokenLine,
   lineSimilarity,
   matchThreshold,

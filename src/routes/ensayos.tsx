@@ -76,6 +76,7 @@ function Ensayos() {
               </div>
               <Link
                 to="/finalizado"
+                search={{ id: rehearsal.id }}
                 className="inline-flex items-center gap-2 text-sm border border-border rounded-lg px-3 py-1.5 hover:border-primary/40 hover:text-primary"
               >
                 Ver reporte <Play className="w-3 h-3" />

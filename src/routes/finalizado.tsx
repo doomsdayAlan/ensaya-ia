@@ -24,21 +24,40 @@ import { TopBar } from "@/components/TopBar";
 import { DirectorAvatar } from "@/components/DirectorAvatar";
 import { formatDuration, getPerfilUsuario } from "@/lib/rehearsal-data";
 import { feedbackSourceLabel } from "@/lib/ai/feedback-label";
-import { loadLocalReport, loadRecentRehearsalsSafe, type LocalRehearsalReport } from "@/lib/rehearsal-runtime";
+import {
+  loadLocalReport,
+  loadRecentRehearsalsSafe,
+  loadReportFromHistoryId,
+  type LocalRehearsalReport,
+} from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/finalizado")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    id: typeof search.id === "string" && search.id.length > 0 ? search.id : undefined,
+  }),
   component: Finalizado,
 });
 
 function Finalizado() {
   const nav = useNavigate();
+  const { id: historyId } = Route.useSearch();
   const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
   useEffect(() => {
+    if (historyId) {
+      setLocalReport(loadReportFromHistoryId(historyId) ?? loadLocalReport());
+      return;
+    }
     setLocalReport(loadLocalReport());
-  }, []);
+  }, [historyId]);
   const { data: report, isLoading } = useQuery({
-    queryKey: ["latest-rehearsal-report-v2"],
-    queryFn: () => loadRecentRehearsalsSafe(1).then((rows) => rows[0] ?? null),
+    queryKey: ["latest-rehearsal-report-v2", historyId ?? "latest"],
+    queryFn: async () => {
+      if (historyId) {
+        const rows = await loadRecentRehearsalsSafe(20);
+        return rows.find((row) => row.id === historyId) ?? null;
+      }
+      return loadRecentRehearsalsSafe(1).then((rows) => rows[0] ?? null);
+    },
     enabled: !localReport,
     staleTime: 60_000,
   });
@@ -86,7 +105,7 @@ function Finalizado() {
 
       {isLoading && !localReport && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
-          Cargando reporte desde Postgres...
+          Cargando reporte...
         </div>
       )}
 

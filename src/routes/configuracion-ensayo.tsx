@@ -24,6 +24,9 @@ import { getDemoScriptSetup } from "@/lib/demo-script";
 import { getGrupoParaScript } from "@/lib/grupos-api";
 
 export const Route = createFileRoute("/configuracion-ensayo")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    scriptId: typeof search.scriptId === "string" && search.scriptId.length > 0 ? search.scriptId : undefined,
+  }),
   component: ConfigEnsayo,
 });
 
@@ -48,8 +51,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 
 function ConfigEnsayo() {
   const nav = useNavigate();
+  const { scriptId: scriptIdFromSearch } = Route.useSearch();
   const queryClient = useQueryClient();
-  const [selectedScriptId, setSelectedScriptId] = useState("");
+  const [selectedScriptId, setSelectedScriptId] = useState(scriptIdFromSearch ?? "");
   const [selectedSceneId, setSelectedSceneId] = useState("");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [mode, setMode] = useState("individual");
@@ -87,10 +91,14 @@ function ConfigEnsayo() {
   }, [profileData]);
 
   useEffect(() => {
+    if (scriptIdFromSearch) {
+      setSelectedScriptId(scriptIdFromSearch);
+      return;
+    }
     if (!selectedScriptId && scripts?.length > 0 && scripts[0]) {
       setSelectedScriptId(scripts[0].id);
     }
-  }, [selectedScriptId, scripts]);
+  }, [selectedScriptId, scripts, scriptIdFromSearch]);
 
   useEffect(() => {
     if (!setup?.scene) return;

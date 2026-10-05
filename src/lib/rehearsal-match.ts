@@ -38,6 +38,8 @@ const EASY_THRESHOLD = 0.28;
 const MEDIUM_THRESHOLD = 0.36;
 const HARD_THRESHOLD = 0.48;
 const CLOSE_RATIO = 0.7;
+/** Baja la dificultad efectiva cuando allowImprov esta activo (umbral mas facil). */
+export const IMPROV_DIFFICULTY_OFFSET = 25;
 
 export type LineVerdict = {
   score: number;
@@ -53,6 +55,17 @@ export type RehearsalScore = {
   rhythm: number;
   projection: number;
   score: number;
+};
+
+export type ScoreRehearsalInput = {
+  /** Solo puntuaciones 0..1 de lineas del USUARIO (lineSimilarity / Levenshtein). */
+  userLineScores: number[];
+  skipped: number;
+  repeated: number;
+  /** Lineas de usuario completadas (aceptadas o puntuadas). */
+  userLinesCompleted: number;
+  /** Total de lineas del usuario en la escena. */
+  userLinesTotal: number;
 };
 
 /**
@@ -141,6 +154,12 @@ export function matchThreshold(aiDifficulty: number) {
   return HARD_THRESHOLD;
 }
 
+/** Aplica offset de improvisacion para bajar el umbral de coincidencia. */
+export function effectiveMatchDifficulty(aiDifficulty: number, allowImprov: boolean) {
+  if (!allowImprov) return aiDifficulty;
+  return Math.max(0, aiDifficulty - IMPROV_DIFFICULTY_OFFSET);
+}
+
 export function evaluateSpokenLine(spoken: string, expected: string, difficulty: number): LineVerdict {
   const score = lineSimilarity(spoken, expected);
   const needed = matchThreshold(difficulty);
@@ -152,14 +171,35 @@ export function evaluateSpokenLine(spoken: string, expected: string, difficulty:
   };
 }
 
-export function scoreRehearsal(scores: number[], skipped: number): RehearsalScore {
-  const memorization = scores.length
-    ? Math.round((scores.reduce((sum, value) => sum + value, 0) / scores.length) * 100)
+/**
+ * Puntuacion agregada del ensayo. Cada metrica esta documentada abajo;
+ * ninguna usa analisis acustico real del microfono.
+ */
+export function scoreRehearsal(input: ScoreRehearsalInput): RehearsalScore {
+  const { userLineScores, skipped, repeated, userLinesCompleted, userLinesTotal } = input;
+
+  // memorization: promedio de scores Levenshtein/similitud SOLO de lineas del usuario
+  const memorization = userLineScores.length
+    ? Math.round((userLineScores.reduce((sum, value) => sum + value, 0) / userLineScores.length) * 100)
     : 0;
-  const clarity = Math.min(100, memorization + 4);
-  const expression = Math.max(40, memorization - 6);
-  const rhythm = Math.max(35, 100 - skipped * 8);
-  const projection = Math.min(100, 60 + Math.round(memorization * 0.3));
+
+  // clarity: proxy de calidad de coincidencia (Levenshtein / lineSimilarity), no claridad acustica
+  const clarity = memorization;
+
+  // rhythm: castigo por omisiones y repeticiones
+  const rhythm = Math.max(0, Math.min(100, 100 - skipped * 8 - repeated * 5));
+
+  // expression: proxy por repeticiones vs completado (no expresividad vocal real)
+  const completionRatio = userLinesTotal > 0 ? userLinesCompleted / userLinesTotal : 0;
+  const repeatRatio =
+    userLinesCompleted > 0 ? Math.min(1, repeated / Math.max(1, userLinesCompleted)) : repeated > 0 ? 1 : 0;
+  const expression = Math.round(
+    Math.max(0, Math.min(100, completionRatio * 65 + (1 - repeatRatio) * 35)),
+  );
+
+  // projection: tasa de completado de lineas de usuario mezclada con memorizacion
+  const projection = Math.round(Math.max(0, Math.min(100, completionRatio * 50 + memorization * 0.5)));
+
   const score = Math.round((memorization + clarity + expression + rhythm + projection) / 5);
   return { memorization, clarity, expression, rhythm, projection, score };
 }
