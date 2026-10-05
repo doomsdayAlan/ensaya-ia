@@ -526,6 +526,7 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium truncate">{item.characterName}</div>
             <div className="text-xs text-muted-foreground truncate">
+              {item.sceneTitle ? `${item.sceneTitle} · ` : ""}
               {item.actorName} · {formatGrupoDate(item.createdAt)}
               {item.durationSec ? ` · ${item.durationSec.toFixed(1)}s` : ""}
             </div>

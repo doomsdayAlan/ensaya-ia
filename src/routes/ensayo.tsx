@@ -246,6 +246,8 @@ function Ensayo() {
       const saved = await saveGrabacionGrupo({
         grupoId: resolvedGrupoId,
         scriptId,
+        sceneId: activeConfig?.sceneId ?? setup?.scene?.id ?? latest?.scene_id ?? null,
+        sceneTitle: setup?.scene?.title ?? null,
         lineId: line.id,
         characterId: line.character_id,
         characterName: line.character?.name ?? selectedCharacter?.name ?? "Actor",

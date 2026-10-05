@@ -11,6 +11,9 @@ export type StoredGrupoGrabacion = {
   id: string;
   grupoId: string;
   scriptId: string;
+  /** Escena del ensayo en la que se tomo la grabacion. Ausente en tomas viejas. */
+  sceneId: string | null;
+  sceneTitle: string | null;
   lineId: string;
   characterId: string | null;
   characterName: string;
@@ -64,6 +67,8 @@ export async function upsertGrupoGrabacion(
       id: existing?.id ?? input.id ?? `grab-${crypto.randomUUID()}`,
       grupoId: input.grupoId,
       scriptId: input.scriptId,
+      sceneId: input.sceneId ?? existing?.sceneId ?? null,
+      sceneTitle: input.sceneTitle ?? existing?.sceneTitle ?? null,
       lineId: input.lineId,
       characterId: input.characterId,
       characterName: input.characterName,

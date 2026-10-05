@@ -384,6 +384,8 @@ export type GrupoGrabacionMeta = {
   id: string;
   grupoId: string;
   scriptId: string;
+  sceneId: string | null;
+  sceneTitle: string | null;
   lineId: string;
   characterId: string | null;
   characterName: string;
@@ -411,6 +413,8 @@ export async function listGrabacionesGrupo(grupoId: string): Promise<GrupoGrabac
 export async function saveGrabacionGrupo(input: {
   grupoId: string;
   scriptId: string;
+  sceneId?: string | null;
+  sceneTitle?: string | null;
   lineId: string;
   characterId: string | null;
   characterName: string;
@@ -424,6 +428,8 @@ export async function saveGrabacionGrupo(input: {
   const row = await upsertGrupoGrabacion({
     grupoId: input.grupoId,
     scriptId: input.scriptId,
+    sceneId: input.sceneId ?? null,
+    sceneTitle: input.sceneTitle ?? null,
     lineId: input.lineId,
     characterId: input.characterId,
     characterName: input.characterName,
@@ -444,6 +450,8 @@ function toGrabacionMeta(row: StoredGrupoGrabacion): GrupoGrabacionMeta {
     id: row.id,
     grupoId: row.grupoId,
     scriptId: row.scriptId,
+    sceneId: row.sceneId ?? null,
+    sceneTitle: row.sceneTitle ?? null,
     lineId: row.lineId,
     characterId: row.characterId,
     characterName: row.characterName,
