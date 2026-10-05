@@ -19,9 +19,31 @@ export function readJson<T>(storage: Storage, key: string, fallback: T, legacyKe
   }
 }
 
+function isQuotaExceeded(error: unknown) {
+  if (error instanceof DOMException && error.name === "QuotaExceededError") return true;
+  if (error instanceof Error && /quota/i.test(error.message)) return true;
+  return false;
+}
+
+const QUOTA_MESSAGE =
+  "No hay espacio suficiente en este navegador para guardar mas datos. Borra ensayos, grabaciones o libretos viejos, o libera el almacenamiento del sitio.";
+
 export function writeJson(storage: Storage, key: string, value: unknown) {
   if (!canUseBrowserStorage()) return;
-  storage.setItem(key, JSON.stringify(value));
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    if (isQuotaExceeded(error)) {
+      // Aviso claro al usuario (sonner si esta montado).
+      try {
+        void import("sonner").then(({ toast }) => toast.error(QUOTA_MESSAGE));
+      } catch {
+        // sin UI de toast
+      }
+      throw new Error(QUOTA_MESSAGE);
+    }
+    throw error;
+  }
 }
 
 export function removeKey(storage: Storage, key: string) {

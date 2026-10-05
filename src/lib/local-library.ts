@@ -1,12 +1,10 @@
 import type { CharacterRecord, ScriptDetails, ScriptImportDraft, ScriptRecord, ScriptSetup } from "@/lib/rehearsal-data";
+import { cleanCharacterName, isCharacterCue, isSceneHeaderLine } from "@/lib/script-text";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
+import { LEGACY_STORAGE } from "@/lib/legacy-migration";
 
 const LIBRARY_KEY = "ensaya-ia-library";
-/** Solo migracion desde almacenamiento antiguo; no es el nombre del producto. */
-const LEGACY_LIBRARY_KEY = "cine-estrella-library";
-
-const SCENE_HEADER_RE = /^(ACTO|ESCENA|Escena|Acto)\b/i;
 
 type LocalLibrary = {
   scripts: ScriptRecord[];
@@ -20,7 +18,7 @@ function emptyLibrary(): LocalLibrary {
 }
 
 function readLibrary(): LocalLibrary {
-  return readJson<LocalLibrary>(localStorage, LIBRARY_KEY, emptyLibrary(), [LEGACY_LIBRARY_KEY]);
+  return readJson<LocalLibrary>(localStorage, LIBRARY_KEY, emptyLibrary(), [LEGACY_STORAGE.library]);
 }
 
 function writeLibrary(library: LocalLibrary) {
@@ -61,7 +59,7 @@ function splitRawTextIntoScenes(rawText: string): { title: string; body: string 
 
   for (const raw of lines) {
     const trimmed = raw.trim();
-    if (SCENE_HEADER_RE.test(trimmed)) {
+    if (isSceneHeaderLine(trimmed)) {
       sawHeader = true;
       if (current) scenes.push(current);
       current = { title: trimmed.slice(0, 120), bodyLines: [] };
@@ -80,19 +78,6 @@ function splitRawTextIntoScenes(rawText: string): { title: string; body: string 
     title: scene.title,
     body: scene.bodyLines.join("\n"),
   }));
-}
-
-function cleanCharacterName(line: string) {
-  return line.replace(/[:.\-–—]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function isCharacterCue(line: string) {
-  const cleaned = cleanCharacterName(line);
-  if (!cleaned || cleaned.length > 40) return false;
-  if (SCENE_HEADER_RE.test(cleaned)) return false;
-  if (/^\d+$/.test(cleaned)) return false;
-  if (/[.!?¿¡]/.test(cleaned)) return false;
-  return cleaned === cleaned.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/i.test(cleaned);
 }
 
 function parseSceneBody(body: string): ParsedImportLine[] {

@@ -12,6 +12,15 @@ import {
 } from "@/lib/local-library";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { withTimeout } from "@/lib/browser";
+import { cleanCharacterName, isCharacterCue } from "@/lib/script-text";
+
+function isSupabaseConfigured() {
+  const url = import.meta.env.VITE_SUPABASE_URL || (typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined);
+  const key =
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    (typeof process !== "undefined" ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined);
+  return Boolean(url && key);
+}
 
 export type PerfilUsuarioRecord = Tables<"perfil_usuario">;
 export type ScriptRecord = Tables<"scripts">;
@@ -115,13 +124,18 @@ export async function getPerfilUsuario() {
     if (local) return { profile: local, isAuthenticated: true };
   }
 
-  try {
-    const { data, error } = await withTimeout(
-      supabase.from("perfil_usuario").select("*").eq("user_id", user.id).maybeSingle(),
-    );
-    if (error) throw error;
-    if (data) return { profile: data, isAuthenticated: true };
-  } catch {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from("perfil_usuario").select("*").eq("user_id", user.id).maybeSingle(),
+      );
+      if (error) throw error;
+      if (data) return { profile: data, isAuthenticated: true };
+    } catch {
+      const local = loadLocalProfile(user.id);
+      if (local) return { profile: local, isAuthenticated: true };
+    }
+  } else {
     const local = loadLocalProfile(user.id);
     if (local) return { profile: local, isAuthenticated: true };
   }
@@ -177,6 +191,12 @@ export async function getScripts(options: { includeDeleted?: boolean } = {}) {
   const demo = getDemoScriptSetup().script;
   const catalog = demo ? [demo] : [];
 
+  if (!isSupabaseConfigured()) {
+    const byId = new Map<string, ScriptRecord>();
+    [...local, ...catalog].forEach((script) => byId.set(script.id, script));
+    return Array.from(byId.values());
+  }
+
   try {
     let query = supabase.from("scripts").select("*").order("updated_at", { ascending: false });
     if (!options.includeDeleted) query = query.is("deleted_at", null);
@@ -194,6 +214,7 @@ export async function getScripts(options: { includeDeleted?: boolean } = {}) {
 }
 
 export async function getScenesForScript(scriptId: string) {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from("scenes")
     .select("*")
@@ -205,6 +226,7 @@ export async function getScenesForScript(scriptId: string) {
 }
 
 export async function getCharactersForScript(scriptId: string) {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from("characters")
     .select("*")
@@ -220,6 +242,7 @@ async function getRowsById<T extends { id: string }>(
   ids: string[],
 ) {
   if (ids.length === 0) return new Map<string, T>();
+  if (!isSupabaseConfigured()) return new Map<string, T>();
 
   const { data, error } = await supabase.from(table).select("*").in("id", ids);
   if (error) throw error;
@@ -228,6 +251,7 @@ async function getRowsById<T extends { id: string }>(
 }
 
 export async function getSceneLines(sceneId: string): Promise<ScriptLineWithCharacter[]> {
+  if (!isSupabaseConfigured()) return [];
   const { data, error } = await supabase
     .from("script_lines")
     .select("*")
@@ -649,16 +673,9 @@ function parseImportedScriptLines(rawText: string): ImportedScriptLine[] {
   return parsed;
 }
 
-function isCharacterCue(line: string) {
-  const cleaned = cleanCharacterName(line);
-  if (!cleaned || cleaned.length > 40) return false;
-  if (/^\d+$/.test(cleaned)) return false;
-  if (/[.!?¿¡]/.test(cleaned)) return false;
-  return cleaned === cleaned.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/i.test(cleaned);
-}
-
-function cleanCharacterName(value: string) {
-  return value.replace(/[:.-]+$/g, "").trim();
+function estimateLineDuration(text: string) {
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.max(3, Math.min(12, Math.round(words / 2.4)));
 }
 
 function normalizeName(value: string) {
@@ -669,12 +686,10 @@ function normalizeName(value: string) {
     .trim();
 }
 
-function estimateLineDuration(text: string) {
-  const words = text.split(/\s+/).filter(Boolean).length;
-  return Math.max(3, Math.min(12, Math.round(words / 2.4)));
-}
-
 export async function createRehearsalSession(draft: RehearsalDraft) {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase no esta configurado; el ensayo corre en local.");
+  }
   const user = await getCurrentUser();
   if (!user) throw new Error("Inicia sesion para sincronizar tu ensayo.");
 
@@ -705,6 +720,7 @@ export async function updateRehearsalSession(
   sessionId: string,
   patch: TablesUpdate<"rehearsal_sessions">,
 ) {
+  if (!isSupabaseConfigured()) return null;
   const user = await getCurrentUser();
   if (!user) throw new Error("Inicia sesion para sincronizar tu ensayo.");
 
