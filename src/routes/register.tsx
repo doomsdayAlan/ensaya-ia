@@ -1,18 +1,20 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field } from "@/components/AuthShell";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { DemoAccountButton, goAfterLogin } from "@/components/DemoAccountButton";
+import { useAuth } from "@/hooks/useAuth";
+import { registerLocalAccount } from "@/lib/local-auth";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
     meta: [
-      { title: "Crear cuenta - Cine Estrella" },
+      { title: "Crear cuenta - Ensaya IA" },
       {
         name: "description",
-        content: "Registrate en Cine Estrella y empieza a ensayar teatro con IA.",
+        content: "Registrate en Ensaya IA y empieza a ensayar teatro con IA.",
       },
     ],
   }),
@@ -20,12 +22,17 @@ export const Route = createFileRoute("/register")({
 });
 
 function Register() {
-  const nav = useNavigate();
+  const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) goAfterLogin();
+  }, [authLoading, user]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,64 +46,22 @@ function Register() {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          display_name: name,
-          full_name: name,
-          name,
-        },
-      },
-    });
-
-    if (error) {
+    try {
+      await registerLocalAccount({ email, password, displayName: name });
+      queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
+      toast.success("Cuenta guardada en la base de datos. Ya puedes ensayar.");
+      goAfterLogin();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo crear la cuenta");
+    } finally {
       setLoading(false);
-      toast.error(error.message);
-      return;
     }
-
-    if (data.session && data.user) {
-      const { error: profileError } = await supabase.from("perfil_usuario").upsert(
-        {
-          user_id: data.user.id,
-          display_name: name,
-          email,
-          avatar_url: data.user.user_metadata?.avatar_url ?? null,
-        },
-        { onConflict: "user_id" },
-      );
-
-      if (profileError) {
-        setLoading(false);
-        toast.error("La cuenta se creo, pero no se pudo sincronizar el perfil.");
-        return;
-      }
-    }
-
-    setLoading(false);
-    toast.success("Cuenta creada. Bienvenido al escenario");
-    nav({ to: "/" });
-  };
-
-  const google = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast.error("No se pudo continuar con Google");
-      return;
-    }
-    if (result.redirected) return;
-    nav({ to: "/" });
   };
 
   return (
     <AuthShell
       title="Crea tu cuenta"
-      subtitle="Unete y empieza a ensayar con la IA."
+      subtitle="La cuenta se guarda en IndexedDB, la base de datos del navegador."
       footer={
         <>
           Ya tienes cuenta?{" "}
@@ -179,13 +144,7 @@ function Register() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        <button
-          type="button"
-          onClick={google}
-          className="w-full border border-border bg-surface rounded-lg py-2.5 text-sm hover:border-primary/40 transition"
-        >
-          Continuar con Google
-        </button>
+        <DemoAccountButton />
       </form>
     </AuthShell>
   );

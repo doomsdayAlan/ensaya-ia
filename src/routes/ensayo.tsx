@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Square,
@@ -9,25 +9,37 @@ import {
   Mic,
   MicOff,
   Volume2,
-  Pause,
   SkipBack,
   SkipForward,
   RotateCcw,
   Play,
-  ChevronDown,
-  History,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import {
-  getLatestRehearsal,
-  getScriptSetup,
   updateRehearsalSession,
   type ScriptLineWithCharacter,
 } from "@/lib/rehearsal-data";
-
-// NUEVAS IMPORTACIONES: API REST en lugar de WebSockets
-import { startRecording, stopRecording } from "@/lib/teleprompter-api";
+import { requestRehearsalFeedback } from "@/lib/ai/request-rehearsal-feedback";
+import {
+  buildFeedback,
+  canUseSpeechRecognition,
+  canUseSpeechSynthesis,
+  evaluateSpokenLine,
+  listenForLine,
+  matchThreshold,
+  scoreRehearsal,
+  speakLine,
+  stopSpeaking,
+} from "@/lib/rehearsal-ai";
+import {
+  loadActiveRehearsal,
+  loadRecentRehearsalsSafe,
+  loadScriptSetupSafe,
+  saveLocalReport,
+  type ActiveRehearsal,
+} from "@/lib/rehearsal-runtime";
+import { getDemoScriptSetup } from "@/lib/demo-script";
 
 export const Route = createFileRoute("/ensayo")({
   component: Ensayo,
@@ -48,91 +60,377 @@ function Wave({ active }: { active?: boolean }) {
 }
 
 function Ensayo() {
-  const [connectionStatus, setConnectionStatus] = useState("Esperando para iniciar...");
+  const nav = useNavigate();
+  const listenRef = useRef<{ stop: () => void } | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const [lastTakeUrl, setLastTakeUrl] = useState<string | null>(null);
+  const advancingRef = useRef(false);
+  const scoresRef = useRef<number[]>([]);
+  const skippedRef = useRef(0);
+
+  const [activeConfig, setActiveConfig] = useState<ActiveRehearsal | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  useEffect(() => {
+    setActiveConfig(loadActiveRehearsal());
+    setSessionReady(true);
+  }, []);
+  const [connectionStatus, setConnectionStatus] = useState("Pulsa el microfono para comenzar el ensayo con IA.");
   const [isRehearsing, setIsRehearsing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
+  const [transcript, setTranscript] = useState("");
+  const [typedLine, setTypedLine] = useState("");
+  const [lastScore, setLastScore] = useState<number | null>(null);
 
   const { data: latest, isLoading: rehearsalLoading } = useQuery({
-    queryKey: ["latest-rehearsal"],
-    queryFn: getLatestRehearsal,
+    queryKey: ["latest-rehearsal-v2"],
+    queryFn: () => loadRecentRehearsalsSafe(1).then((rows) => rows[0] ?? null),
+    enabled: sessionReady && !activeConfig,
   });
+  const scriptId = activeConfig?.scriptId ?? latest?.script_id ?? undefined;
+  const sceneId = activeConfig?.sceneId ?? latest?.scene_id ?? undefined;
   const { data: setup, isLoading: setupLoading } = useQuery({
-    queryKey: ["script-setup", latest?.script_id, latest?.scene_id],
-    queryFn: () => getScriptSetup(latest?.script_id ?? undefined, latest?.scene_id ?? undefined),
-    enabled: Boolean(latest?.script_id),
+    queryKey: ["script-setup-v2", scriptId, sceneId],
+    queryFn: () => loadScriptSetupSafe(scriptId, sceneId),
+    placeholderData: getDemoScriptSetup(),
   });
 
-  const loading = rehearsalLoading || setupLoading;
+  const loading = (rehearsalLoading && !activeConfig) || setupLoading;
   const lines = useMemo(() => setup?.lines ?? [], [setup?.lines]);
-  
-  // Líneas actual, siguiente y posterior
   const currentLine = lines[activeLineIndex] ?? null;
   const nextLine = lines[activeLineIndex + 1] ?? null;
   const afterLine = lines[activeLineIndex + 2] ?? null;
-
-  const selectedCharacter =
-    latest?.selectedCharacter ??
-    setup?.characters.find((item) => item.actor_type === "user") ??
+  const selectedCharacterId =
+    activeConfig?.selectedCharacterId ??
+    latest?.selected_character_id ??
+    setup?.characters.find((item) => item.actor_type === "user")?.id ??
     null;
-
-  const completed = Math.max(latest?.completed_lines ?? 0, activeLineIndex);
-  const total = latest?.total_lines || lines.length || 1;
+  const selectedCharacter =
+    setup?.characters.find((item) => item.id === selectedCharacterId) ??
+    latest?.selectedCharacter ??
+    null;
+  const difficulty = activeConfig?.aiDifficulty ?? latest?.ai_difficulty ?? 50;
+  const mode = activeConfig?.mode ?? latest?.mode ?? "individual";
+  const total = lines.length || latest?.total_lines || 1;
+  const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
-  const teleprompterSessionId = latest?.teleprompter_session_id ?? null;
+  const isMyTurn = Boolean(currentLine && currentLine.character_id === selectedCharacterId);
+  const speechOk = canUseSpeechRecognition() && canUseSpeechSynthesis();
 
-  const isMyTurn = currentLine?.character_id === selectedCharacter?.id;
+  const stopTake = () => {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    recorderRef.current = null;
+  };
 
-  // ─── NUEVA LÓGICA DE GRABACIÓN REST ─────────────────────────────
-  const handleToggleRecording = async () => {
-    if (!teleprompterSessionId || !selectedCharacter || !currentLine) {
-      toast.error("Faltan datos (Ensayo, Personaje o Línea) para grabar.");
+  const startTake = async () => {
+    stopTake();
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (!chunksRef.current.length) return;
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        setLastTakeUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+    } catch {
+      // El reconocimiento de voz sigue funcionando aunque no se grabe el WebM.
+    }
+  };
+
+  const stopListen = () => {
+    listenRef.current?.stop();
+    listenRef.current = null;
+    setIsListening(false);
+    stopTake();
+  };
+
+  const finishRehearsal = async (reason: "done" | "manual") => {
+    stopListen();
+    stopSpeaking();
+    setIsRehearsing(false);
+    setIsSpeaking(false);
+
+    const skipped = skippedRef.current;
+    const completedLines = Math.min(lines.length, activeLineIndex + (reason === "done" ? 1 : 0));
+    const { memorization, clarity, expression, rhythm, projection, score } = scoreRehearsal(
+      scoresRef.current,
+      skipped,
+    );
+    const endedAt = new Date().toISOString();
+    const fallbackFeedback = buildFeedback({
+      memorization,
+      completed: completedLines,
+      total: lines.length,
+      skipped,
+    });
+    let feedback = fallbackFeedback;
+    let feedbackSource = "template";
+    const wantsAiNotes = activeConfig?.feedbackEnabled !== false;
+    if (wantsAiNotes) {
+      try {
+        const notes = await requestRehearsalFeedback({
+          data: {
+            scriptTitle: setup?.script?.title ?? "Sin libreto",
+            sceneTitle: setup?.scene?.title ?? "Sin escena",
+            characterName: selectedCharacter?.name ?? "Actor",
+            memorization,
+            completed: completedLines,
+            total: lines.length,
+            skipped,
+            difficulty,
+          },
+        });
+        if (notes?.text) {
+          feedback = notes.text;
+          feedbackSource = notes.source;
+        }
+      } catch {
+        feedback = fallbackFeedback;
+        feedbackSource = "template";
+      }
+    }
+
+    saveLocalReport(
+      {
+        scriptTitle: setup?.script?.title ?? "Sin libreto",
+        sceneTitle: setup?.scene?.title ?? "Sin escena",
+        sceneLocation: setup?.scene?.location ?? setup?.scene?.description ?? null,
+        characterName: selectedCharacter?.name ?? "Actor",
+        mode,
+        aiDifficulty: difficulty,
+        startedAt: activeConfig?.startedAt ?? latest?.started_at ?? endedAt,
+        endedAt,
+        completedLines,
+        totalLines: lines.length,
+        skippedLines: skipped,
+        repeatedLines: 0,
+        memorization,
+        clarity,
+        expression,
+        rhythm,
+        projection,
+        score,
+        feedback,
+        feedbackSource,
+      },
+      {
+        script: setup?.script ?? null,
+        scene: setup?.scene ?? null,
+        selectedCharacter,
+        scriptId: activeConfig?.scriptId ?? setup?.script?.id ?? null,
+        sceneId: activeConfig?.sceneId ?? setup?.scene?.id ?? null,
+        characterId: selectedCharacterId,
+      },
+    );
+
+    if (activeConfig?.supabaseSessionId) {
+      void updateRehearsalSession(activeConfig.supabaseSessionId, {
+        status: "completed",
+        ended_at: endedAt,
+        completed_lines: completedLines,
+        total_lines: lines.length,
+        skipped_lines: skipped,
+        memorization_score: memorization,
+        clarity_score: clarity,
+        expression_score: expression,
+        rhythm_score: rhythm,
+        projection_score: projection,
+        score,
+        feedback_summary: feedback,
+        teleprompter_status: "stopped",
+        teleprompter_last_event: reason === "done" ? "Escena completada con IA local." : "Ensayo finalizado.",
+      }).catch(() => null);
+    }
+
+    nav({ to: "/finalizado" });
+  };
+
+  const advance = (opts?: { skipped?: boolean; score?: number }) => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    stopListen();
+    stopSpeaking();
+    setIsSpeaking(false);
+    setTranscript("");
+
+    if (opts?.skipped) skippedRef.current += 1;
+    if (typeof opts?.score === "number") {
+      scoresRef.current.push(opts.score);
+      setLastScore(opts.score);
+    }
+
+    setActiveLineIndex((prev) => {
+      if (prev >= lines.length - 1) {
+        window.setTimeout(() => {
+          void finishRehearsal("done");
+        }, 50);
+        return prev;
+      }
+      return prev + 1;
+    });
+
+    window.setTimeout(() => {
+      advancingRef.current = false;
+    }, 250);
+  };
+
+  const applySpokenText = (text: string, fromTyping = false) => {
+    if (!currentLine) return false;
+    const verdict = evaluateSpokenLine(text, currentLine.text, difficulty);
+    setTranscript(text);
+    setLastScore(verdict.score);
+    if (verdict.accepted) {
+      setConnectionStatus(`Linea reconocida (${verdict.percent}%).`);
+      toast.success("La IA reconocio tu linea");
+      setTypedLine("");
+      advance({ score: verdict.score });
+      return true;
+    }
+    if (verdict.close || fromTyping) {
+      setConnectionStatus(`Casi... ${verdict.percent}%. Sigue hablando o escribe las palabras clave.`);
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    if (!isRehearsing || !currentLine || advancingRef.current) return;
+
+    if (isMyTurn) {
+      setIsSpeaking(false);
+      stopSpeaking();
+      if (!canUseSpeechRecognition()) {
+        setConnectionStatus("Este navegador no reconoce voz. Usa Chrome o Edge, o avanza la linea a mano.");
+        return;
+      }
+      setConnectionStatus("Tu turno. Di la linea en voz alta.");
+      stopListen();
+      void startTake();
+      const handle = listenForLine({
+        onTranscript: (text) => {
+          applySpokenText(text);
+        },
+        onError: (message) => {
+          setConnectionStatus(message);
+          toast.error(message);
+        },
+      });
+      listenRef.current = handle;
+      setIsListening(Boolean(handle));
+      return () => {
+        handle?.stop();
+      };
+    }
+
+    const character = currentLine.character;
+    setConnectionStatus(`${character?.name ?? "IA"} esta interpretando su linea...`);
+    setIsSpeaking(true);
+    setIsListening(false);
+    stopListen();
+
+    let cancelled = false;
+    void speakLine(currentLine.text, character?.voice)
+      .then(() => {
+        if (cancelled) return;
+        setIsSpeaking(false);
+        advance({ score: 1 });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setIsSpeaking(false);
+        setConnectionStatus(error instanceof Error ? error.message : "No se pudo hablar la linea de IA.");
+      });
+
+    return () => {
+      cancelled = true;
+      stopSpeaking();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn]);
+
+  useEffect(() => {
+    return () => {
+      stopListen();
+      stopSpeaking();
+    };
+  }, []);
+
+  const handleToggleRecording = () => {
+    if (!speechOk) {
+      toast.error("Usa Chrome o Edge en http://localhost para voz y microfono.");
+    }
+
+    if (isRehearsing && isMyTurn) {
+      const verdict = evaluateSpokenLine(transcript, currentLine?.text ?? "", difficulty);
+      if (verdict.score >= matchThreshold(difficulty) * 0.75) {
+        advance({ score: verdict.score });
+        return;
+      }
+      advance({ skipped: true, score: verdict.score });
       return;
     }
 
     if (isRehearsing) {
-      try {
-        setConnectionStatus("Procesando y guardando audio...");
-        setIsRehearsing(false);
-        await stopRecording();
-        setConnectionStatus(`Toma guardada para línea ${activeLineIndex + 1}`);
-        toast.success("Audio guardado exitosamente");
-
-        // Auto-avanzar a la siguiente línea si existe
-        if (activeLineIndex < lines.length - 1) {
-          setActiveLineIndex((prev) => prev + 1);
-        }
-      } catch (error) {
-        toast.error("Error al detener grabación. ¿Está corriendo FastAPI?");
-        setConnectionStatus("Error de conexión");
-      }
-    } else {
-      try {
-        setConnectionStatus("Grabando micrófono... (Habla ahora)");
-        setIsRehearsing(true);
-        await startRecording({
-          idEnsayo: teleprompterSessionId,
-          idActor: selectedCharacter.id,
-          idLinea: currentLine.id,
-        });
-      } catch (error) {
-        setIsRehearsing(false);
-        toast.error("Error al iniciar grabación. Revisa tu backend en Python.");
-        setConnectionStatus("Error al conectar con Python");
-      }
+      void finishRehearsal("manual");
+      return;
     }
+
+    if (typeof window !== "undefined") {
+      window.speechSynthesis.getVoices();
+    }
+    setIsRehearsing(true);
+    setConnectionStatus("Ensayo con IA iniciado.");
+    toast.success("Ensayo iniciado. La IA interpretara los otros personajes.");
   };
 
   const handleSkipForward = () => {
-    setActiveLineIndex((prev) => Math.min(lines.length - 1, prev + 1));
+    if (activeLineIndex >= lines.length - 1) {
+      void finishRehearsal("done");
+      return;
+    }
+    advance({ skipped: isMyTurn });
   };
 
   const handleSkipBackward = () => {
+    stopListen();
+    stopSpeaking();
+    setIsSpeaking(false);
+    setTranscript("");
     setActiveLineIndex((prev) => Math.max(0, prev - 1));
   };
 
   const handleReset = () => {
+    stopListen();
+    stopSpeaking();
+    scoresRef.current = [];
+    skippedRef.current = 0;
     setActiveLineIndex(0);
-    setConnectionStatus("Escena reiniciada.");
+    setTranscript("");
+    setTypedLine("");
+    setLastScore(null);
+    setIsRehearsing(false);
+    setIsSpeaking(false);
+    setConnectionStatus("Escena reiniciada. Pulsa el microfono para volver a empezar.");
+  };
+
+  const submitTypedLine = () => {
+    if (!isRehearsing || !isMyTurn || !currentLine) return;
+    const text = typedLine.trim();
+    if (!text) return;
+    applySpokenText(text, true);
   };
 
   return (
@@ -141,7 +439,14 @@ function Ensayo() {
 
       {loading && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
-          Cargando sesion desde Postgres...
+          Cargando escena...
+        </div>
+      )}
+
+      {!speechOk && (
+        <div className="bg-card border border-primary/40 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
+          Para que la IA te escuche y hable, abre la app en Chrome o Edge. Puedes avanzar lineas a mano si el
+          reconocimiento no esta disponible.
         </div>
       )}
 
@@ -154,38 +459,34 @@ function Ensayo() {
             </span>
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {setup?.scene?.location ?? setup?.scene?.description ?? "Escena sincronizada"}
+            {setup?.scene?.location ?? setup?.scene?.description ?? "Escena lista para ensayar"}
           </div>
         </div>
         <div className="flex items-center gap-2 ml-auto sm:ml-0">
           <Crown className="w-5 h-5 text-primary" />
           <div>
-            <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-              Interpretas
-            </div>
+            <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">Interpretas</div>
             <div className="text-sm">
               {selectedCharacter ? `${selectedCharacter.name} (Tu)` : "Sin personaje"}
             </div>
           </div>
         </div>
         <div className="text-xs leading-relaxed">
-          <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-0.5">
-            Modo
+          <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-0.5">Modo</div>
+          <div>
+            Realismo: <span className="text-primary">{difficultyLabel(difficulty)}</span>
           </div>
           <div>
-            Realismo:{" "}
-            <span className="text-primary">{difficultyLabel(latest?.ai_difficulty ?? 50)}</span>
-          </div>
-          <div>
-            Ritmo: <span className="text-primary">{modeLabel(latest?.mode ?? "individual")}</span>
+            Ritmo: <span className="text-primary">{modeLabel(mode)}</span>
           </div>
         </div>
-        <Link
-          to="/finalizado"
+        <button
+          type="button"
+          onClick={() => void finishRehearsal("manual")}
           className="ml-auto inline-flex items-center gap-2 border border-destructive/50 text-destructive rounded-lg px-3 py-2 text-sm hover:bg-destructive/10"
         >
           <Square className="w-3.5 h-3.5 fill-current" /> Finalizar ensayo
-        </Link>
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_300px] gap-5">
@@ -193,37 +494,49 @@ function Ensayo() {
           <LineCard
             title="Linea actual"
             line={currentLine}
-            selectedCharacterId={selectedCharacter?.id ?? null}
+            selectedCharacterId={selectedCharacterId}
             active
+            speaking={isSpeaking && !isMyTurn}
           />
-          <LineCard
-            title="Siguiente linea"
-            line={nextLine}
-            selectedCharacterId={selectedCharacter?.id ?? null}
-          />
-          <LineCard
-            title="Despues"
-            line={afterLine}
-            selectedCharacterId={selectedCharacter?.id ?? null}
-            faded
-          />
+          <LineCard title="Siguiente linea" line={nextLine} selectedCharacterId={selectedCharacterId} />
+          <LineCard title="Despues" line={afterLine} selectedCharacterId={selectedCharacterId} faded />
 
           <div className="bg-card border border-border/60 rounded-xl p-4 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs">
               <div className="flex items-center gap-1.5 text-success">
-                <span className={`w-1.5 h-1.5 rounded-full ${isRehearsing ? "bg-destructive animate-pulse" : "bg-success"}`} />{" "}
-                Teleprompter {isRehearsing ? "(Grabando)" : "(Listo)"}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${isListening || isSpeaking ? "bg-destructive animate-pulse" : "bg-success"}`}
+                />{" "}
+                {isSpeaking ? "IA hablando" : isListening ? "Escuchando" : isRehearsing ? "En ensayo" : "Listo"}
               </div>
               <div className="font-mono text-foreground mt-0.5">{connectionStatus}</div>
+              {transcript && (
+                <div className="text-muted-foreground mt-1">
+                  Te escuche: "{transcript}"
+                  {lastScore !== null ? ` · ${Math.round(lastScore * 100)}%` : ""}
+                </div>
+              )}
+              {lastTakeUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const audio = new Audio(lastTakeUrl);
+                    void audio.play();
+                  }}
+                  className="mt-2 text-xs text-primary hover:underline"
+                >
+                  Reproducir ultima toma
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <ControlBtn icon={SkipBack} label="Retroceder linea" onClick={handleSkipBackward} />
               <button
                 onClick={handleToggleRecording}
-                disabled={!teleprompterSessionId}
-                className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 disabled:opacity-50 disabled:shadow-none transition-all ${
-                  isRehearsing 
-                    ? "bg-destructive text-destructive-foreground ring-destructive/20" 
+                aria-label={isRehearsing ? "Detener ensayo" : "Iniciar ensayo con microfono"}
+                className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 transition-all ${
+                  isRehearsing
+                    ? "bg-destructive text-destructive-foreground ring-destructive/20"
                     : "bg-primary-gradient text-primary-foreground ring-primary/20"
                 }`}
               >
@@ -232,7 +545,40 @@ function Ensayo() {
               <ControlBtn icon={SkipForward} label="Siguiente linea" onClick={handleSkipForward} />
               <ControlBtn icon={RotateCcw} label="Reiniciar" onClick={handleReset} />
             </div>
-            <div />
+            <div className="w-full">
+              <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+                Microfono o escribe tu linea
+              </label>
+              <div className="mt-1 flex gap-2">
+                <input
+                  value={typedLine}
+                  disabled={!isRehearsing || !isMyTurn}
+                  onChange={(event) => setTypedLine(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      submitTypedLine();
+                    }
+                  }}
+                  placeholder={
+                    isRehearsing && isMyTurn
+                      ? "Di la linea o escribela aqui y pulsa Enter"
+                      : isRehearsing
+                        ? "Espera a tu turno o usa siguiente linea"
+                        : "Pulsa el microfono para empezar"
+                  }
+                  className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  disabled={!isRehearsing || !isMyTurn || !typedLine.trim()}
+                  onClick={submitTypedLine}
+                  className="inline-flex items-center gap-2 border border-primary/40 text-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  Enviar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -252,17 +598,21 @@ function Ensayo() {
             </div>
           </Card>
 
-          <Card title="Teleprompter en vivo">
-            <Quick label="Sesion FastAPI" value={teleprompterSessionId ? "Conectado" : "Desconectado"} />
-            <Quick label="Turno actual" value={isMyTurn ? "Tu turno" : "IA / escucha"} />
+          <Card title="IA en vivo">
+            <Quick label="Motor de voz" value={speechOk ? "Navegador" : "No disponible"} />
+            <Quick label="Turno actual" value={isMyTurn ? "Tu turno" : "IA habla"} />
+            <Quick
+              label="Coincidencia"
+              value={lastScore === null ? "—" : `${Math.round(lastScore * 100)}%`}
+            />
             <div className="mt-3 rounded-lg border border-border/60 bg-surface p-3">
-              <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">
-                Estado
-              </div>
+              <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">Estado</div>
               <p className="text-xs leading-relaxed text-foreground min-h-10">
-                {isRehearsing 
-                  ? "Grabando... Cuando termines tu línea, presiona Stop para avanzar." 
-                  : "Presiona el micrófono para iniciar la grabación de la línea actual."}
+                {isSpeaking
+                  ? "La IA esta diciendo su linea. Cuando termine, te toca a ti."
+                  : isListening
+                    ? "Habla tu linea. La IA avanza cuando reconoce las palabras clave, aunque no sea literal."
+                    : "Pulsa el microfono para que la IA interprete los otros papeles contigo."}
               </p>
             </div>
           </Card>
@@ -290,12 +640,14 @@ function LineCard({
   selectedCharacterId,
   active,
   faded,
+  speaking,
 }: {
   title: string;
   line: ScriptLineWithCharacter | null;
   selectedCharacterId: string | null;
   active?: boolean;
   faded?: boolean;
+  speaking?: boolean;
 }) {
   const isUserLine = line?.character_id === selectedCharacterId;
   const tone = isUserLine ? "text-primary" : "text-success";
@@ -319,7 +671,7 @@ function LineCard({
               <span className={`text-sm font-semibold ${tone}`}>
                 {line.character?.name.toUpperCase() ?? "NARRADOR"} {isUserLine ? "(Tu)" : "(IA)"}
               </span>
-              <Wave active={active} />
+              <Wave active={Boolean(active && speaking)} />
               {!active && (
                 <span className="ml-auto text-xs text-muted-foreground">
                   00:{String(line.duration_seconds).padStart(2, "0")}
@@ -330,9 +682,7 @@ function LineCard({
             {line.cue && <div className="text-xs text-primary/80 text-right mt-2">{line.cue}</div>}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No hay linea registrada para esta posicion.
-          </p>
+          <p className="text-sm text-muted-foreground">No hay linea registrada para esta posicion.</p>
         )}
       </div>
     </div>
@@ -395,11 +745,7 @@ function CharRow({
           {status} <Wave active={playing} />
         </div>
       </div>
-      {muted ? (
-        <MicOff className="w-4 h-4 text-muted-foreground" />
-      ) : (
-        <Volume2 className="w-4 h-4 text-primary" />
-      )}
+      {muted ? <MicOff className="w-4 h-4 text-muted-foreground" /> : <Volume2 className="w-4 h-4 text-primary" />}
     </div>
   );
 }

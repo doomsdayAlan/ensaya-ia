@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { APP_NAME } from "@/lib/brand";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -73,15 +74,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cine Estrella — Ensaya teatro con IA" },
+      { title: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
       { name: "description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
-      { name: "author", content: "Cine Estrella" },
-      { property: "og:title", content: "Cine Estrella — Ensaya teatro con IA" },
+      { name: "author", content: APP_NAME },
+      { property: "og:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
       { property: "og:description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Cine Estrella — Ensaya teatro con IA" },
+      { name: "twitter:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
       { name: "twitter:description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/17cea9aa-bf06-4410-8ab7-0032ff743ad7" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/17cea9aa-bf06-4410-8ab7-0032ff743ad7" },

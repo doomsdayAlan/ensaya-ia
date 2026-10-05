@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Play, FileText, Settings, Drama, ArrowRight, Crown, MoreVertical } from "lucide-react";
+import { Play, FileText, Settings, Drama, ArrowRight, Crown, MoreVertical, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import { formatRelativeDate, getRecentRehearsals } from "@/lib/rehearsal-data";
+import { formatRelativeDate } from "@/lib/rehearsal-data";
+import { loadRecentRehearsalsSafe } from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -25,6 +26,13 @@ const QUICK = [
     to: "/configuracion-ensayo",
   },
   {
+    icon: Users,
+    title: "Grupos",
+    desc: "Crea o unete a un grupo, asigna personajes y comparte el libreto.",
+    cta: "Abrir grupos",
+    to: "/grupos",
+  },
+  {
     icon: Drama,
     title: "Modo ensayo",
     desc: "La IA interpreta personajes en tiempo real contigo.",
@@ -40,7 +48,7 @@ function Index() {
     isLoading,
   } = useQuery({
     queryKey: ["recent-rehearsals", "home"],
-    queryFn: () => getRecentRehearsals(2),
+    queryFn: () => loadRecentRehearsalsSafe(2),
   });
 
   return (
@@ -54,15 +62,13 @@ function Index() {
               Bienvenido de nuevo
             </p>
             <h1 className="font-display text-5xl lg:text-6xl leading-[1.05] mb-4">
-              Ensaya teatro
-              <br />
-              con <span className="text-gradient-primary italic">IA</span>
+              Ensaya <span className="text-gradient-primary italic">IA</span>
             </h1>
             <p className="text-muted-foreground max-w-md mb-8">
               Practica escenas, interpreta personajes y deja que la IA complete los demas papeles.
             </p>
             <Link
-              to="/ensayo"
+              to="/configuracion-ensayo"
               className="inline-flex items-center gap-2 bg-primary-gradient text-primary-foreground font-medium px-6 py-3 rounded-xl shadow-glow hover:scale-[1.02] transition"
             >
               <Play className="w-4 h-4 fill-current" />
@@ -75,7 +81,7 @@ function Index() {
         </div>
       </section>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-10">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         {QUICK.map(({ icon: Icon, title, desc, cta, to }) => (
           <Link
             key={title}

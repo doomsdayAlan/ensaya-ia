@@ -4,8 +4,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import { Mic, Volume2, Bell, Shield, Download, Save, User } from "lucide-react";
+import { Mic, Volume2, Bell, Shield, Download, Save, User, LogIn, Database } from "lucide-react";
 import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
+import { isAuthRequired, setAuthRequired } from "@/lib/app-config";
+import { getStoredUserCount } from "@/lib/local-auth";
 
 export const Route = createFileRoute("/configuracion")({
   component: Configuracion,
@@ -37,6 +39,13 @@ function Configuracion() {
   const [notifications, setNotifications] = useState(true);
   const [offline, setOffline] = useState(false);
   const [privacy, setPrivacy] = useState("privado");
+  const [requireLogin, setRequireLogin] = useState(true);
+  const [storedUsers, setStoredUsers] = useState(0);
+
+  useEffect(() => {
+    setRequireLogin(isAuthRequired());
+    void getStoredUserCount().then(setStoredUsers);
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -62,7 +71,7 @@ function Configuracion() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-      toast.success("Perfil sincronizado");
+      toast.success("Perfil guardado en este dispositivo");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar"),
   });
@@ -85,7 +94,7 @@ function Configuracion() {
 
       {isLoading && (
         <div className="bg-card border border-border/60 rounded-xl p-5 text-sm text-muted-foreground">
-          Cargando perfil desde Postgres...
+          Cargando perfil...
         </div>
       )}
       {isError && (
@@ -95,7 +104,7 @@ function Configuracion() {
       )}
       {data && !data.isAuthenticated && (
         <div className="bg-card border border-primary/30 rounded-xl p-4 text-sm text-muted-foreground mb-5">
-          Estas viendo valores demo. Inicia sesion para guardar cambios en perfil_usuario.
+          Estas viendo valores de invitado. Inicia sesion para guardar tu perfil en este dispositivo.
         </div>
       )}
 
@@ -155,6 +164,35 @@ function Configuracion() {
           </section>
 
           <section className="grid gap-4">
+            <div className="bg-card border border-border/60 rounded-xl p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-full border border-primary/30 bg-primary/5 grid place-items-center text-primary">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Base de datos de cuentas</h3>
+                  <p className="text-sm text-muted-foreground">
+                    IndexedDB en este navegador (tablas users y perfil_usuario). {storedUsers} cuenta
+                    {storedUsers === 1 ? "" : "s"} guardada{storedUsers === 1 ? "" : "s"}.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <SettingCard
+              icon={LogIn}
+              title="Pedir inicio de sesion"
+              desc="Si esta activo, Inicio y el resto de pantallas piden cuenta antes de entrar."
+              enabled={requireLogin}
+              onToggle={(value) => {
+                setRequireLogin(value);
+                setAuthRequired(value);
+                toast.success(
+                  value
+                    ? "La app pedira sesion para entrar"
+                    : "La app permite entrar como invitado",
+                );
+              }}
+            />
             <SettingCard
               icon={Bell}
               title="Notificaciones"

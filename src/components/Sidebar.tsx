@@ -1,33 +1,20 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Home, FileText, Drama, Settings, LogIn, LogOut } from "lucide-react";
+import { Home, FileText, Drama, Settings, LogIn, LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
-import { useAuth } from "@/hooks/useAuth";
-import { getPerfilUsuario } from "@/lib/rehearsal-data";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 const NAV = [
   { to: "/", label: "Inicio", icon: Home },
   { to: "/libretos", label: "Libretos", icon: FileText },
   { to: "/ensayos", label: "Ensayos", icon: Drama },
+  { to: "/grupos", label: "Grupos", icon: Users },
   { to: "/configuracion", label: "Configuración", icon: Settings },
 ] as const;
 
 export function Sidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const { user, loading, signOut } = useAuth();
-  const { data: profileData } = useQuery({
-    queryKey: ["perfil-usuario"],
-    queryFn: getPerfilUsuario,
-    enabled: Boolean(user),
-  });
-  const displayName =
-    profileData?.profile.display_name || user?.user_metadata?.display_name || user?.email;
-
-  const handleSignOut = async () => {
-    await signOut();
-    toast.success("Sesión cerrada");
-  };
+  const { user, loading, signOut, displayName } = useCurrentProfile();
 
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-sidebar border-r border-border/60 px-5 py-7">
@@ -62,7 +49,10 @@ export function Sidebar() {
             {displayName}
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={async () => {
+              await signOut();
+              toast.success("Sesión cerrada");
+            }}
             className="mt-2 inline-flex items-center justify-center gap-2 border border-border/60 bg-surface text-foreground rounded-lg px-4 py-2.5 text-sm font-medium hover:border-primary/40 transition"
           >
             <LogOut className="w-4 h-4" /> Cerrar sesión

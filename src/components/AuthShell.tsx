@@ -28,7 +28,7 @@ export function AuthShell({
             Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.
           </p>
         </div>
-        <p className="relative z-10 text-xs text-muted-foreground">© 2026 Cine Estrella</p>
+        <p className="relative z-10 text-xs text-muted-foreground">© 2026 Ensaya IA</p>
       </div>
 
       <div className="flex flex-col justify-center px-6 sm:px-12 py-10">

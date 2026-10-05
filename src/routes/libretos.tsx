@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
+import { readScriptFile } from "@/lib/pdf-script";
 import {
   deleteScriptPermanently,
   duplicateScript,
@@ -163,7 +164,7 @@ function Libretos() {
       refreshScripts();
       setSelectedId(script.id);
       setActiveTab("Mis libretos");
-      toast.success("Libreto importado en la base de datos");
+      toast.success("Libreto importado en este dispositivo");
     },
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "No se pudo importar el libreto"),
@@ -212,7 +213,7 @@ function Libretos() {
       refreshScripts();
       setSelectedId(script.id);
       setActiveTab("Mis libretos");
-      toast.success("Copia creada en la base de datos");
+      toast.success("Copia creada en este dispositivo");
     },
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "No se pudo duplicar el libreto"),
@@ -261,7 +262,7 @@ function Libretos() {
       return;
     }
 
-    const rawText = await file.text();
+    const rawText = await readScriptFile(file);
     const title = file.name
       .replace(/\.[^.]+$/, "")
       .replace(/[-_]+/g, " ")
@@ -298,7 +299,7 @@ function Libretos() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.md,.text"
+        accept=".txt,.md,.text,.pdf,application/pdf"
         className="hidden"
         onChange={handleImportFile}
       />
@@ -307,7 +308,7 @@ function Libretos() {
         <div>
           <h1 className="font-display text-4xl">Gestion de libretos</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Organiza, importa y administra tus guiones teatrales.
+            Organiza, importa (.txt, .md o PDF) y administra tus guiones teatrales.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -385,7 +386,7 @@ function Libretos() {
           <div className={viewMode === "grid" ? "grid sm:grid-cols-2 gap-3" : "space-y-3"}>
             {isLoading && (
               <div className="bg-card border border-border/60 rounded-xl p-4 text-sm text-muted-foreground">
-                Cargando libretos desde Postgres...
+                Cargando libretos...
               </div>
             )}
             {isError && (

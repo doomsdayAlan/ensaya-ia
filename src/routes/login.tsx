@@ -1,19 +1,20 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field } from "@/components/AuthShell";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { DemoAccountButton, goAfterLogin } from "@/components/DemoAccountButton";
+import { useAuth } from "@/hooks/useAuth";
+import { loginLocalAccount } from "@/lib/local-auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Iniciar sesion - Cine Estrella" },
+      { title: "Iniciar sesion - Ensaya IA" },
       {
         name: "description",
-        content: "Accede a tu cuenta de Cine Estrella para gestionar libretos y ensayar con IA.",
+        content: "Accede a tu cuenta de Ensaya IA para gestionar libretos y ensayar con IA.",
       },
     ],
   }),
@@ -21,47 +22,35 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const nav = useNavigate();
   const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!authLoading && user) goAfterLogin();
+  }, [authLoading, user]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-
-    if (error) {
-      toast.error(
-        error.message === "Invalid login credentials" ? "Credenciales incorrectas" : error.message,
-      );
-      return;
+    try {
+      await loginLocalAccount({ email, password });
+      queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
+      toast.success("Sesion iniciada");
+      goAfterLogin();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo iniciar sesion");
+    } finally {
+      setLoading(false);
     }
-
-    queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-    toast.success("Bienvenido de nuevo");
-    nav({ to: "/" });
-  };
-
-  const google = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast.error("No se pudo iniciar sesion con Google");
-      return;
-    }
-    if (result.redirected) return;
-    queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-    nav({ to: "/" });
   };
 
   return (
     <AuthShell
       title="Bienvenido de nuevo"
-      subtitle="Inicia sesion para continuar tus ensayos."
+      subtitle="Inicia sesion. Tu cuenta se guarda en la base de datos de este navegador."
       footer={
         <>
           Aun no tienes cuenta?{" "}
@@ -115,13 +104,10 @@ function Login() {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        <button
-          type="button"
-          onClick={google}
-          className="w-full border border-border bg-surface rounded-lg py-2.5 text-sm hover:border-primary/40 transition"
-        >
-          Continuar con Google
-        </button>
+        <DemoAccountButton />
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Demo: {`demo@ensayaia.local`} · contraseña {`ensayo123`}
+        </p>
       </form>
     </AuthShell>
   );

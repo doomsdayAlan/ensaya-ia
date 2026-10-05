@@ -1,24 +1,10 @@
 import { Bell, ArrowLeft, LogIn, LogOut, User as UserIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
-import { getPerfilUsuario } from "@/lib/rehearsal-data";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 export function TopBar({ back }: { back?: { to: string; label: string } }) {
-  const { user, loading, signOut } = useAuth();
-  const { data: profileData } = useQuery({
-    queryKey: ["perfil-usuario"],
-    queryFn: getPerfilUsuario,
-    enabled: Boolean(user),
-  });
-  const displayName =
-    profileData?.profile.display_name || user?.user_metadata?.display_name || user?.email;
-
-  const handleSignOut = async () => {
-    await signOut();
-    toast.success("Sesión cerrada");
-  };
+  const { user, loading, signOut, displayName } = useCurrentProfile();
 
   return (
     <div className="flex items-center justify-between mb-6">
@@ -33,7 +19,12 @@ export function TopBar({ back }: { back?: { to: string; label: string } }) {
         ) : null}
       </div>
       <div className="flex items-center gap-3">
-        <button className="relative w-9 h-9 rounded-full bg-surface border border-border/60 flex items-center justify-center text-muted-foreground hover:text-primary transition">
+        <button
+          type="button"
+          aria-label="Notificaciones"
+          onClick={() => toast.message("Sin avisos nuevos")}
+          className="relative w-9 h-9 rounded-full bg-surface border border-border/60 flex items-center justify-center text-muted-foreground hover:text-primary transition"
+        >
           <Bell className="w-4 h-4" />
         </button>
         {loading ? null : user ? (
@@ -43,7 +34,10 @@ export function TopBar({ back }: { back?: { to: string; label: string } }) {
               <span className="text-foreground/80 max-w-[160px] truncate">{displayName}</span>
             </div>
             <button
-              onClick={handleSignOut}
+              onClick={async () => {
+                await signOut();
+                toast.success("Sesión cerrada");
+              }}
               className="inline-flex items-center gap-2 border border-border/60 bg-surface text-foreground rounded-lg px-4 py-2 text-sm font-medium hover:border-primary/40 transition"
             >
               <LogOut className="w-4 h-4" /> Salir

@@ -1,3 +1,8 @@
+# Secrets (nunca subir .env con claves reales)
+.env
+.env.*
+!.env.example
+
 # Logs
 logs
 *.log
@@ -15,6 +20,8 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+bun.lock
+bun.lockb
 
 # Wrangler / Cloudflare
 .wrangler/

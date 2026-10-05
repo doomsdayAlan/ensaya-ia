@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
   Calendar,
@@ -17,18 +18,28 @@ import {
   Repeat,
   FileMusic,
 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import { formatDuration, getLatestRehearsal, getPerfilUsuario } from "@/lib/rehearsal-data";
+import { formatDuration, getPerfilUsuario } from "@/lib/rehearsal-data";
+import { feedbackSourceLabel } from "@/lib/ai/feedback-label";
+import { loadLocalReport, loadRecentRehearsalsSafe, type LocalRehearsalReport } from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/finalizado")({
   component: Finalizado,
 });
 
 function Finalizado() {
+  const nav = useNavigate();
+  const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
+  useEffect(() => {
+    setLocalReport(loadLocalReport());
+  }, []);
   const { data: report, isLoading } = useQuery({
-    queryKey: ["latest-rehearsal-report"],
-    queryFn: getLatestRehearsal,
+    queryKey: ["latest-rehearsal-report-v2"],
+    queryFn: () => loadRecentRehearsalsSafe(1).then((rows) => rows[0] ?? null),
+    enabled: !localReport,
+    staleTime: 60_000,
   });
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
@@ -36,32 +47,43 @@ function Finalizado() {
   });
   const profile = profileData?.profile;
   const scores = [
-    { label: "Claridad", value: report?.clarity_score ?? 0 },
-    { label: "Expresion", value: report?.expression_score ?? 0 },
-    { label: "Ritmo", value: report?.rhythm_score ?? 0 },
-    { label: "Proyeccion", value: report?.projection_score ?? 0 },
-    { label: "Memorizacion", value: report?.memorization_score ?? 0 },
+    { label: "Claridad", value: localReport?.clarity ?? report?.clarity_score ?? 0 },
+    { label: "Expresion", value: localReport?.expression ?? report?.expression_score ?? 0 },
+    { label: "Ritmo", value: localReport?.rhythm ?? report?.rhythm_score ?? 0 },
+    { label: "Proyeccion", value: localReport?.projection ?? report?.projection_score ?? 0 },
+    { label: "Memorizacion", value: localReport?.memorization ?? report?.memorization_score ?? 0 },
   ];
   const measuredScores = scores.filter((item) => item.value > 0);
   const overall =
+    localReport?.score ??
     report?.score ??
     (measuredScores.length
-      ? Math.round(
-          measuredScores.reduce((sum, item) => sum + item.value, 0) / measuredScores.length,
-        )
+      ? Math.round(measuredScores.reduce((sum, item) => sum + item.value, 0) / measuredScores.length)
       : 0);
   const r = 56;
   const c = 2 * Math.PI * r;
   const offset = c - (overall / 100) * c;
-  const completed = report?.completed_lines ?? 0;
-  const total = report?.total_lines || completed || 1;
+  const completed = localReport?.completedLines ?? report?.completed_lines ?? 0;
+  const total = localReport?.totalLines || report?.total_lines || completed || 1;
   const completedPercent = Math.min(100, Math.round((completed / total) * 100));
+  const scriptTitle = localReport?.scriptTitle ?? report?.script?.title ?? "Sin libreto";
+  const sceneTitle = localReport?.sceneTitle ?? report?.scene?.title ?? "Sin escena";
+  const sceneLocation = localReport?.sceneLocation ?? report?.scene?.location ?? report?.scene?.description ?? "";
+  const characterName = localReport?.characterName ?? report?.selectedCharacter?.name;
+  const mode = localReport?.mode ?? report?.mode ?? "individual";
+  const difficulty = localReport?.aiDifficulty ?? report?.ai_difficulty ?? 50;
+  const startedAt = localReport?.startedAt ?? report?.started_at;
+  const endedAt = localReport?.endedAt ?? report?.ended_at ?? null;
+  const feedback =
+    localReport?.feedback ?? report?.feedback_summary ?? "Completa un ensayo para generar retroalimentacion.";
+  const skipped = localReport?.skippedLines ?? report?.skipped_lines ?? 0;
+  const repeated = localReport?.repeatedLines ?? report?.repeated_lines ?? 0;
 
   return (
     <AppShell>
       <TopBar back={{ to: "/ensayo", label: "Modo ensayo" }} />
 
-      {isLoading && (
+      {isLoading && !localReport && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
           Cargando reporte desde Postgres...
         </div>
@@ -79,8 +101,8 @@ function Finalizado() {
               <Sparkles className="inline w-7 h-7 text-primary" />
             </h1>
             <p className="text-muted-foreground">
-              {report
-                ? "Reporte sincronizado con rehearsal_sessions."
+              {localReport || report
+                ? "Reporte del ensayo con IA (voz del navegador)."
                 : "No hay una sesion registrada todavia."}
             </p>
           </div>
@@ -92,38 +114,34 @@ function Finalizado() {
         <div className="bg-card border border-border/60 rounded-xl p-5">
           <h3 className="font-medium mb-4">Resumen de la sesion</h3>
           <dl className="space-y-3 text-sm">
-            <Row icon={BookOpen} k="Obra" v={report?.script?.title ?? "Sin libreto"} />
+            <Row icon={BookOpen} k="Obra" v={scriptTitle} />
             <Row
               icon={Drama}
               k="Escena"
               v={
                 <>
                   <span className="text-xs px-2 py-0.5 rounded-full border border-primary/40 text-primary mr-2">
-                    {report?.scene?.title ?? "Sin escena"}
+                    {sceneTitle}
                   </span>
-                  {report?.scene?.location ?? report?.scene?.description ?? ""}
+                  {sceneLocation}
                 </>
               }
             />
             <Row
               icon={Crown}
               k="Personaje"
-              v={
-                report?.selectedCharacter
-                  ? `${report.selectedCharacter.name} (Tu)`
-                  : "Sin personaje"
-              }
+              v={characterName ? `${characterName} (Tu)` : "Sin personaje"}
             />
             <Row
               icon={Sparkles}
               k="Modo"
-              v={`${modeLabel(report?.mode ?? "individual")} - IA ${difficultyLabel(report?.ai_difficulty ?? 50)}`}
+              v={`${modeLabel(mode)} - IA ${difficultyLabel(difficulty)}`}
             />
-            <Row icon={Calendar} k="Fecha" v={formatDate(report?.started_at)} />
+            <Row icon={Calendar} k="Fecha" v={formatDate(startedAt)} />
             <Row
               icon={Clock}
               k="Duracion"
-              v={report ? formatDuration(report.started_at, report.ended_at) : "Sin duracion"}
+              v={startedAt ? formatDuration(startedAt, endedAt) : "Sin duracion"}
             />
           </dl>
         </div>
@@ -180,9 +198,12 @@ function Finalizado() {
           </div>
           <div className="mt-4 rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-            <p>
-              {report?.feedback_summary ?? "Completa un ensayo para generar retroalimentacion."}
-            </p>
+            <div>
+              <p>{feedback}</p>
+              <p className="mt-2 text-[10px] tracking-widest uppercase text-muted-foreground">
+                {feedbackSourceLabel(localReport?.feedbackSource)}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -203,13 +224,13 @@ function Finalizado() {
             <Stat icon={Check} value={`${completed}`} label="Lineas acertadas" tone="success" />
             <Stat
               icon={RotateCcw}
-              value={`${report?.repeated_lines ?? 0}`}
+              value={`${repeated}`}
               label="Lineas repetidas"
               tone="primary"
             />
             <Stat
               icon={X}
-              value={`${report?.skipped_lines ?? 0}`}
+              value={`${skipped}`}
               label="Lineas omitidas"
               tone="destructive"
             />
@@ -219,7 +240,10 @@ function Finalizado() {
         <div className="bg-card border border-border/60 rounded-xl p-5">
           <h3 className="font-medium mb-3">Momentos destacados</h3>
           <div className="space-y-3">
-            {(report?.highlights.length ? report.highlights : []).map((highlight) => (
+            {(Array.isArray((report as { highlights?: { id: string; event_time: string; note: string }[] } | null)?.highlights)
+              ? (report as { highlights: { id: string; event_time: string; note: string }[] }).highlights
+              : []
+            ).map((highlight) => (
               <div key={highlight.id} className="flex items-start gap-3 text-sm">
                 <span className="text-success font-mono text-xs mt-0.5">
                   {highlight.event_time}
@@ -227,7 +251,7 @@ function Finalizado() {
                 <span className="text-foreground/90">{highlight.note}</span>
               </div>
             ))}
-            {(!report || report.highlights.length === 0) && (
+            {(!report || !("highlights" in report) || !report.highlights?.length) && (
               <p className="text-sm text-muted-foreground">Sin momentos destacados guardados.</p>
             )}
           </div>
@@ -240,23 +264,50 @@ function Finalizado() {
               icon={FileEdit}
               title="Revisar mis errores"
               sub="Ve las lineas que puedes mejorar"
+              onClick={() => nav({ to: "/ensayo" })}
             />
-            <Next icon={Repeat} title="Repetir esta escena" sub="Practica nuevamente desde aqui" />
+            <Next
+              icon={Repeat}
+              title="Repetir esta escena"
+              sub="Practica nuevamente desde aqui"
+              onClick={() => nav({ to: "/ensayo" })}
+            />
             <Next
               icon={FileMusic}
               title="Continuar con la siguiente escena"
               sub="Sigue con otra escena del libreto"
+              onClick={() => nav({ to: "/configuracion-ensayo" })}
             />
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border/60 rounded-xl p-4">
-        <button className="inline-flex items-center gap-2 text-sm border border-border bg-surface rounded-lg px-4 py-2 hover:border-primary/40">
+        <button
+          onClick={() => toast.success("Este es el reporte completo de tu ultima sesion.")}
+          className="inline-flex items-center gap-2 text-sm border border-border bg-surface rounded-lg px-4 py-2 hover:border-primary/40"
+        >
           <BarChart3 className="w-4 h-4" /> Ver reporte detallado
         </button>
         <div className="flex items-center gap-3">
-          <button className="inline-flex items-center gap-2 text-sm border border-border bg-surface rounded-lg px-4 py-2 hover:border-primary/40">
+          <button
+            onClick={() => {
+              const payload = localReport ?? report;
+              if (!payload) {
+                toast.error("No hay reporte para exportar.");
+                return;
+              }
+              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "reporte-ensayo-ensaya-ia.json";
+              link.click();
+              URL.revokeObjectURL(url);
+              toast.success("Reporte descargado");
+            }}
+            className="inline-flex items-center gap-2 text-sm border border-border bg-surface rounded-lg px-4 py-2 hover:border-primary/40"
+          >
             <Download className="w-4 h-4" /> Exportar reporte
           </button>
           <Link
@@ -308,9 +359,22 @@ function Stat({
   );
 }
 
-function Next({ icon: Icon, title, sub }: { icon: typeof FileEdit; title: string; sub: string }) {
+function Next({
+  icon: Icon,
+  title,
+  sub,
+  onClick,
+}: {
+  icon: typeof FileEdit;
+  title: string;
+  sub: string;
+  onClick: () => void;
+}) {
   return (
-    <button className="w-full flex items-start gap-3 p-2.5 rounded-lg bg-surface border border-border/40 hover:border-primary/40 transition text-left">
+    <button
+      onClick={onClick}
+      className="w-full flex items-start gap-3 p-2.5 rounded-lg bg-surface border border-border/40 hover:border-primary/40 transition text-left"
+    >
       <Icon className="w-4 h-4 text-primary mt-0.5" />
       <div className="flex-1">
         <div className="text-sm">{title}</div>

@@ -3,7 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { Drama, Crown, Play } from "lucide-react";
-import { formatRelativeDate, formatScore, getRecentRehearsals } from "@/lib/rehearsal-data";
+import { formatRelativeDate, formatScore } from "@/lib/rehearsal-data";
+import { loadRecentRehearsalsSafe } from "@/lib/rehearsal-runtime";
 
 export const Route = createFileRoute("/ensayos")({
   component: Ensayos,
@@ -20,7 +21,7 @@ function Ensayos() {
     isLoading,
   } = useQuery({
     queryKey: ["recent-rehearsals", "list"],
-    queryFn: () => getRecentRehearsals(10),
+    queryFn: () => loadRecentRehearsalsSafe(10),
   });
 
   return (
@@ -33,7 +34,7 @@ function Ensayos() {
       <div className="space-y-3">
         {isLoading && (
           <div className="bg-card border border-border/60 rounded-xl p-4 text-sm text-muted-foreground">
-            Cargando historial desde Postgres...
+            Cargando historial de ensayos...
           </div>
         )}
         {isError && (

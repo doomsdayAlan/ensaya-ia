@@ -18,20 +18,9 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import {
-  createRehearsalSession,
-  getPerfilUsuario,
-  getScriptSetup,
-  getScripts,
-  updatePerfilUsuario,
-  updateRehearsalSession,
-} from "@/lib/rehearsal-data";
-
-// IMPORTACIONES CORREGIDAS
-import {
-  createTeleprompterEnsayo,
-  teleprompterApiUrl,
-} from "@/lib/teleprompter-api";
+import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
+import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
+import { getDemoScriptSetup } from "@/lib/demo-script";
 
 export const Route = createFileRoute("/configuracion-ensayo")({
   component: ConfigEnsayo,
@@ -66,20 +55,24 @@ function ConfigEnsayo() {
   const [diff, setDiff] = useState(50);
   const [emo, setEmo] = useState(true);
   const [improv, setImprov] = useState(true);
-  const [feedback, setFeedback] = useState(false);
+  const [feedback, setFeedback] = useState(true);
 
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
     queryFn: getPerfilUsuario,
   });
   const { data: scripts = [], isLoading: scriptsLoading } = useQuery({
-    queryKey: ["scripts"],
-    queryFn: getScripts,
+    queryKey: ["scripts", "catalog-v2"],
+    queryFn: loadScriptsSafe,
+    placeholderData: [getDemoScriptSetup().script!],
+    staleTime: 5_000,
   });
   const { data: setup, isLoading: setupLoading } = useQuery({
-    queryKey: ["script-setup", selectedScriptId, selectedSceneId],
-    queryFn: () => getScriptSetup(selectedScriptId || undefined, selectedSceneId || undefined),
+    queryKey: ["script-setup-v2", selectedScriptId, selectedSceneId],
+    queryFn: () => loadScriptSetupSafe(selectedScriptId || undefined, selectedSceneId || undefined),
     enabled: selectedScriptId !== "",
+    initialData: selectedScriptId ? undefined : getDemoScriptSetup(),
+    placeholderData: getDemoScriptSetup(),
   });
 
   useEffect(() => {
@@ -128,7 +121,7 @@ function ConfigEnsayo() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-      toast.success("Plantilla guardada en perfil_usuario");
+      toast.success("Plantilla guardada en tu perfil");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar"),
   });
@@ -145,8 +138,7 @@ function ConfigEnsayo() {
         throw new Error("Selecciona el personaje que vas a interpretar.");
       }
 
-      // 1. Crear la sesión en Supabase (Frontend)
-      const rehearsal = await createRehearsalSession({
+      return startLocalRehearsal({
         scriptId: setup.script.id,
         sceneId: setup.scene.id,
         selectedCharacterId: selectedCharacter.id,
@@ -156,39 +148,16 @@ function ConfigEnsayo() {
         allowImprov: improv,
         feedbackEnabled: feedback,
         totalLines: setup.lines.length,
+        source: setup.script.id.startsWith("00000000-0000-4000-8000") ? "demo" : "supabase",
       });
-
-      // 2. LÓGICA CORREGIDA PARA FASTAPI
-      try {
-        const teleprompterSession = await createTeleprompterEnsayo({
-          idObra: setup.script.id,
-          modoEnsayo: mode,
-        });
-
-        return updateRehearsalSession(rehearsal.id, {
-          teleprompter_session_id: teleprompterSession.id_ensayo,
-          teleprompter_status: "ready",
-          teleprompter_last_event: `Sesion FastAPI creada (Ensayo ID: ${teleprompterSession.id_ensayo})`,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "No se pudo conectar con el backend del teleprompter.";
-
-        await updateRehearsalSession(rehearsal.id, {
-          teleprompter_status: "error",
-          teleprompter_last_event: message,
-        }).catch(() => null);
-
-        throw new Error(
-          `El ensayo se guardo en Postgres, pero no se pudo iniciar el teleprompter: ${message}`,
-        );
-      }
     },
-    onSuccess: () => {
+    onSuccess: (active) => {
       queryClient.invalidateQueries({ queryKey: ["recent-rehearsals"] });
-      toast.success("Ensayo sincronizado");
+      toast.success(
+        active.supabaseSessionId
+          ? "Ensayo listo. La IA usara la voz del navegador."
+          : "Ensayo local listo (sin cuenta). La IA usara la voz del navegador.",
+      );
       nav({ to: "/ensayo" });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo iniciar"),
@@ -208,7 +177,7 @@ function ConfigEnsayo() {
         <div>
           <h1 className="font-display text-4xl">Configuracion de ensayo</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Define los detalles y crea una sesion sincronizada con Postgres.
+            Elige libreto, personaje y arranca el ensayo. La IA habla las otras lineas en el navegador.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -380,7 +349,7 @@ function ConfigEnsayo() {
               />
               <ToggleRow
                 label="Feedback al finalizar"
-                desc="La IA dara retroalimentacion al final."
+                desc="Gemini redacta notas de director al terminar. Si no hay clave, se usan notas locales."
                 on={feedback}
                 onChange={setFeedback}
               />
@@ -447,9 +416,9 @@ function ConfigEnsayo() {
           <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs flex gap-2">
             <Sparkles className="w-4 h-4 text-primary shrink-0" />
             <div>
-              <div className="text-primary">Listo para sincronizar tu ensayo.</div>
+              <div className="text-primary">Listo para ensayar con IA en local.</div>
               <div className="text-muted-foreground">
-                Postgres + FastAPI en {teleprompterApiUrl("/health")}.
+                Tu microfono + voz del navegador. No hace falta FastAPI para esta version.
               </div>
             </div>
           </div>

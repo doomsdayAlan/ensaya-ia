@@ -1,32 +1,41 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { isAuthRequired } from "@/lib/app-config";
+import {
+  getLocalAuthUser,
+  logoutLocalAccount,
+  subscribeLocalAuth,
+  type LocalAuthUser,
+} from "@/lib/local-auth";
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<LocalAuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set listener FIRST
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-    });
-
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
+    const sync = () => {
+      setUser(getLocalAuthUser());
       setLoading(false);
-    });
+      queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
+      queryClient.invalidateQueries({ queryKey: ["current-user-id"] });
+      queryClient.invalidateQueries({ queryKey: ["scripts"] });
+    };
 
-    return () => subscription.unsubscribe();
+    sync();
+    return subscribeLocalAuth(sync);
   }, [queryClient]);
 
-  return { session, user, loading, signOut: () => supabase.auth.signOut() };
+  return {
+    session: user ? { user } : null,
+    user,
+    loading,
+    signOut: async () => {
+      logoutLocalAccount();
+      // Con el candado activo, Inicio no debe verse sin cuenta.
+      if (isAuthRequired() && typeof window !== "undefined") {
+        window.location.assign("/login");
+      }
+    },
+  };
 }
