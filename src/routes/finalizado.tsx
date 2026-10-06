@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
+import { DirectorAvatar } from "@/components/DirectorAvatar";
 import { formatDuration, getPerfilUsuario } from "@/lib/rehearsal-data";
 import { feedbackSourceLabel } from "@/lib/ai/feedback-label";
 import { loadLocalReport, loadRecentRehearsalsSafe, type LocalRehearsalReport } from "@/lib/rehearsal-runtime";
@@ -196,15 +197,12 @@ function Finalizado() {
               ))}
             </div>
           </div>
-          <div className="mt-4 rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-            <div>
-              <p>{feedback}</p>
-              <p className="mt-2 text-[10px] tracking-widest uppercase text-muted-foreground">
-                {feedbackSourceLabel(localReport?.feedbackSource)}
-              </p>
-            </div>
-          </div>
+          <DirectorAvatar
+            mode="feedback"
+            text={feedback}
+            sourceLabel={feedbackSourceLabel(localReport?.feedbackSource)}
+            className="mt-4"
+          />
         </div>
       </div>
 
