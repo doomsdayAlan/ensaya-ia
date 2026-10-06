@@ -161,7 +161,7 @@ function collectTranscripts(result: BrowserSpeechRecognitionEvent["results"][num
 export function listenForLine(options: {
   onTranscript: (text: string, isFinal: boolean) => void;
   onError?: (message: string) => void;
-}): { stop: () => void } | null {
+}): { stop: () => void; reset: () => void } | null {
   const Ctor = getSpeechRecognitionCtor();
   if (!Ctor) return null;
 
@@ -221,6 +221,9 @@ export function listenForLine(options: {
   }
 
   return {
+    reset: () => {
+      collected = "";
+    },
     stop: () => {
       stopped = true;
       try {

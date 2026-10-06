@@ -65,7 +65,7 @@ function Wave({ active }: { active?: boolean }) {
 
 function Ensayo() {
   const nav = useNavigate();
-  const listenRef = useRef<{ stop: () => void } | null>(null);
+  const listenRef = useRef<{ stop: () => void; reset: () => void } | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const lastTakeBlobRef = useRef<Blob | null>(null);
@@ -489,6 +489,9 @@ function Ensayo() {
     } else {
       failedLineIdRef.current = currentLine.id;
     }
+    // Nuevo intento de la misma linea: limpia acumulado STT para comparar por separado.
+    accumulatedFinalRef.current = "";
+    listenRef.current?.reset();
     if (verdict.close || fromTyping) {
       setConnectionStatus(`Casi... ${verdict.percent}%. Sigue hablando o escribe las palabras clave.`);
     }
@@ -569,7 +572,11 @@ function Ensayo() {
           }
           finalEvalTimerRef.current = window.setTimeout(() => {
             finalEvalTimerRef.current = null;
-            applySpokenText(accumulatedFinalRef.current);
+            const attempt = accumulatedFinalRef.current;
+            // Reinicia antes de evaluar el siguiente intento de la misma linea.
+            accumulatedFinalRef.current = "";
+            listenRef.current?.reset();
+            applySpokenText(attempt);
           }, 750);
         },
         onError: (message) => {

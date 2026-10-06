@@ -20,7 +20,7 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
-import { getGrupoParaScript, isMiembroDelGrupo } from "@/lib/grupos-api";
+import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
 import { getLocalScriptSetup } from "@/lib/local-library";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 
@@ -74,7 +74,11 @@ function ConfigEnsayo() {
   const grupoIdFromSearch = searchParams.grupoId;
   const modeFromSearch = searchParams.mode;
   const queryClient = useQueryClient();
-  const [selectedScriptId, setSelectedScriptId] = useState(scriptIdFromSearch ?? "");
+  const [selectedScriptId, setSelectedScriptId] = useState(() => {
+    if (!scriptIdFromSearch) return "";
+    if (grupoIdFromSearch && !isLibretoEnGrupo(grupoIdFromSearch, scriptIdFromSearch)) return "";
+    return scriptIdFromSearch;
+  });
   const [selectedSceneId, setSelectedSceneId] = useState("");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [mode, setMode] = useState(modeFromSearch === "grupo" ? "grupo" : "individual");
@@ -105,13 +109,16 @@ function ConfigEnsayo() {
         script.source_type === "seed"
       );
     });
-    // Libreto preseleccionado desde un grupo: mostrarlo aunque sea privado de un compañero.
+    // Libreto preseleccionado desde un grupo: mostrarlo solo si pertenece a ese grupoId.
     if (scriptIdFromSearch && lockedGrupoId) {
+      if (!isLibretoEnGrupo(lockedGrupoId, scriptIdFromSearch)) {
+        return base;
+      }
       const already = base.some((s) => s.id === scriptIdFromSearch);
       if (!already) {
         const fromCatalog = (scripts || []).find((s) => s?.id === scriptIdFromSearch);
         const fromLocal = getLocalScriptSetup(scriptIdFromSearch)?.script ?? null;
-        const extra = fromCatalog ?? fromLocal ?? getDemoScriptSetup().script;
+        const extra = fromCatalog ?? fromLocal ?? null;
         if (extra && extra.id === scriptIdFromSearch) return [extra, ...base];
       }
     }
@@ -145,13 +152,20 @@ function ConfigEnsayo() {
 
   useEffect(() => {
     if (scriptIdFromSearch) {
+      // Con grupo en la URL, solo preseleccionar si el libreto pertenece a ese grupo.
+      if (lockedGrupoId && !isLibretoEnGrupo(lockedGrupoId, scriptIdFromSearch)) {
+        if (!selectedScriptId && visibleScripts.length > 0 && visibleScripts[0]) {
+          setSelectedScriptId(visibleScripts[0].id);
+        }
+        return;
+      }
       setSelectedScriptId(scriptIdFromSearch);
       return;
     }
     if (!selectedScriptId && visibleScripts.length > 0 && visibleScripts[0]) {
       setSelectedScriptId(visibleScripts[0].id);
     }
-  }, [selectedScriptId, visibleScripts, scriptIdFromSearch]);
+  }, [selectedScriptId, visibleScripts, scriptIdFromSearch, lockedGrupoId]);
 
   useEffect(() => {
     if (!setup?.scene) return;
@@ -174,6 +188,7 @@ function ConfigEnsayo() {
 
   useEffect(() => {
     if (!grupoIdFromSearch || !scriptIdFromSearch) return;
+    if (!isLibretoEnGrupo(grupoIdFromSearch, scriptIdFromSearch)) return;
     let cancelled = false;
     void (async () => {
       const member = await isMiembroDelGrupo(grupoIdFromSearch);

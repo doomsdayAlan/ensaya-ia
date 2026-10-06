@@ -83,8 +83,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
       { name: "twitter:description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
-      { property: "og:image", content: "/og-ensaya-ia.jpg" },
-      { name: "twitter:image", content: "/og-ensaya-ia.jpg" },
+      { property: "og:image", content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg" },
+      { name: "twitter:image", content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

@@ -436,6 +436,13 @@ export async function isMiembroDelGrupo(grupoId: string): Promise<boolean> {
   return store.miembros.some((item) => item.grupo_id === grupoId && item.user_id === userId);
 }
 
+/** True si el libreto esta asociado a ese grupo (datos locales). */
+export function isLibretoEnGrupo(grupoId: string, scriptId: string): boolean {
+  if (!grupoId || !scriptId) return false;
+  const store = readStore();
+  return store.libretos.some((item) => item.grupo_id === grupoId && item.script_id === scriptId);
+}
+
 export async function getScriptDetailsForGrupo(scriptId: string, _grupoId: string): Promise<ScriptDetails> {
   return getScriptDetails(scriptId);
 }

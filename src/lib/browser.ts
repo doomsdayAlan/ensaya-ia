@@ -34,12 +34,7 @@ export function writeJson(storage: Storage, key: string, value: unknown) {
     storage.setItem(key, JSON.stringify(value));
   } catch (error) {
     if (isQuotaExceeded(error)) {
-      // Aviso claro al usuario (sonner si esta montado).
-      try {
-        void import("sonner").then(({ toast }) => toast.error(QUOTA_MESSAGE));
-      } catch {
-        // sin UI de toast
-      }
+      // Sin toast aqui: el caller muestra un solo aviso al usuario.
       throw new Error(QUOTA_MESSAGE);
     }
     throw error;
