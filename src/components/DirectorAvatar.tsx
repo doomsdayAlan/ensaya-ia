@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Mic, Square, Volume2 } from "lucide-react";
 import { canUseSpeechSynthesis, resolveRehearsalVoice, speakLine, stopSpeaking } from "@/lib/rehearsal-ai";
@@ -57,7 +57,7 @@ export function DirectorAvatar({
       preferredVoice: profileData?.profile?.preferred_voice ?? null,
       forDirector: true,
     }) ?? "Sofia (Femenina)";
-  const title = mode === "welcome" ? "Tu companero de ensayo" : "Notas del director";
+  const title = mode === "welcome" ? "Tu compañero de ensayo" : "Notas del director";
   const buttonLabel = speaking
     ? "Detener"
     : mode === "welcome"
@@ -108,9 +108,9 @@ export function DirectorAvatar({
 
   const moodHint =
     mood === "celebrate"
-      ? "¡Que buen ensayo!"
+      ? "¡Qué buen ensayo!"
       : mood === "coach"
-        ? "Vamos otra vez, tu puedes"
+        ? "Vamos otra vez, tú puedes"
         : mood === "speaking"
           ? "Te estoy contando…"
           : "Listo para ayudarte";
@@ -161,7 +161,7 @@ export function DirectorAvatar({
 
           <p className="text-[10px] text-muted-foreground leading-relaxed flex items-start gap-1.5">
             <Mic className="w-3 h-3 shrink-0 mt-0.5 opacity-70" />
-            Tocá “Escuchar notas” para oír al director. Pronto Ensayín también te acompañará al empezar.
+            Toca “Escuchar notas” para oír al director.
           </p>
         </div>
       </div>
@@ -169,22 +169,151 @@ export function DirectorAvatar({
   );
 }
 
+const PUPIL_MAX = 3.2;
+
 function DirectorBlob({ mood }: { mood: DirectorMood }) {
   const uid = useId().replace(/:/g, "");
   const bodyGrad = `blob-body-${uid}`;
   const glowGrad = `blob-glow-${uid}`;
   const shineGrad = `blob-shine-${uid}`;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<SVGGElement>(null);
+  const pupilLRef = useRef<SVGGElement>(null);
+  const pupilRRef = useRef<SVGGElement>(null);
+  const [blink, setBlink] = useState(false);
+  const [wink, setWink] = useState(false);
+  const [wave, setWave] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
-  const eyeOpen = mood === "celebrate" ? 7.5 : mood === "coach" ? 5.5 : 6.2;
-  const eyeGap = mood === "celebrate" ? 11 : 10;
-  const mouth =
-    mood === "celebrate" ? "smile-big" : mood === "coach" ? "soft" : mood === "speaking" ? "talk" : "smile";
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReducedMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Seguimiento del puntero (o mirada suave en movil) con rAF.
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    const finePointer = window.matchMedia("(pointer: fine)").matches;
+    let raf = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let curX = 0;
+    let curY = 0;
+    let wanderT = 0;
+
+    const apply = (x: number, y: number) => {
+      const tx = x.toFixed(2);
+      const ty = y.toFixed(2);
+      pupilLRef.current?.setAttribute("transform", `translate(${tx} ${ty})`);
+      pupilRRef.current?.setAttribute("transform", `translate(${tx} ${ty})`);
+      if (bodyRef.current) {
+        const tilt = (x / PUPIL_MAX) * 4;
+        bodyRef.current.style.setProperty("--blob-tilt", `${tilt.toFixed(2)}deg`);
+      }
+    };
+
+    const tick = (now: number) => {
+      if (!finePointer) {
+        wanderT = now * 0.00045;
+        targetX = Math.sin(wanderT) * PUPIL_MAX * 0.7;
+        targetY = Math.cos(wanderT * 0.85) * PUPIL_MAX * 0.45;
+      }
+      curX += (targetX - curX) * 0.14;
+      curY += (targetY - curY) * 0.14;
+      apply(curX, curY);
+      raf = requestAnimationFrame(tick);
+    };
+
+    const onMove = (event: MouseEvent) => {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const nx = (event.clientX - cx) / Math.max(rect.width * 0.9, 1);
+      const ny = (event.clientY - cy) / Math.max(rect.height * 0.9, 1);
+      const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+      targetX = clamp(nx) * PUPIL_MAX;
+      targetY = clamp(ny) * PUPIL_MAX;
+    };
+
+    if (finePointer) {
+      window.addEventListener("mousemove", onMove, { passive: true });
+    }
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      if (finePointer) window.removeEventListener("mousemove", onMove);
+      pupilLRef.current?.setAttribute("transform", "translate(0, 0)");
+      pupilRRef.current?.setAttribute("transform", "translate(0, 0)");
+      bodyRef.current?.style.setProperty("--blob-tilt", "0deg");
+    };
+  }, [reducedMotion]);
+
+  // Parpadeo aleatorio + microanimaciones ocasionales (saludo / guino).
+  useEffect(() => {
+    if (reducedMotion) return;
+    let blinkTimer = 0;
+    let microTimer = 0;
+    let winkClear = 0;
+    let waveClear = 0;
+
+    const scheduleBlink = () => {
+      const delay = 2200 + Math.random() * 3800;
+      blinkTimer = window.setTimeout(() => {
+        setBlink(true);
+        window.setTimeout(() => setBlink(false), 140);
+        scheduleBlink();
+      }, delay);
+    };
+
+    const scheduleMicro = () => {
+      const delay = 7000 + Math.random() * 9000;
+      microTimer = window.setTimeout(() => {
+        if (Math.random() > 0.45) {
+          setWink(true);
+          winkClear = window.setTimeout(() => setWink(false), 420);
+        } else {
+          setWave(true);
+          waveClear = window.setTimeout(() => setWave(false), 900);
+        }
+        scheduleMicro();
+      }, delay);
+    };
+
+    scheduleBlink();
+    scheduleMicro();
+    return () => {
+      window.clearTimeout(blinkTimer);
+      window.clearTimeout(microTimer);
+      window.clearTimeout(winkClear);
+      window.clearTimeout(waveClear);
+    };
+  }, [reducedMotion]);
+
+  const eyeRy = mood === "celebrate" ? 5.2 : mood === "coach" ? 10.5 : 11.5;
+  const eyeRx = mood === "celebrate" ? 11 : 11.5;
+  const happyEyes = mood === "celebrate";
+  const showSparkles = mood === "celebrate";
 
   return (
     <div
-      className={`director-blob relative w-36 h-36 mx-auto ${
-        mood === "speaking" ? "director-blob--speaking" : "director-blob--idle"
-      }`}
+      ref={rootRef}
+      className={[
+        "director-blob relative w-36 h-36 mx-auto",
+        `director-blob--${mood === "speaking" ? "speaking" : mood === "celebrate" ? "celebrate" : mood === "coach" ? "coach" : "idle"}`,
+        blink ? "director-blob--blink" : "",
+        wink ? "director-blob--wink" : "",
+        wave ? "director-blob--wave" : "",
+        reducedMotion ? "director-blob--reduced" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       aria-hidden
     >
       <div className="director-blob__rings absolute inset-0 pointer-events-none" aria-hidden>
@@ -193,123 +322,188 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
         <span className="director-blob__ring director-blob__ring--3" />
       </div>
 
+      {showSparkles && (
+        <div className="director-blob__sparkles absolute inset-0 pointer-events-none z-[2]" aria-hidden>
+          <span className="director-blob__spark director-blob__spark--1" />
+          <span className="director-blob__spark director-blob__spark--2" />
+          <span className="director-blob__spark director-blob__spark--3" />
+        </div>
+      )}
+
       <svg viewBox="0 0 160 160" className="relative z-[1] w-full h-full drop-shadow-lg">
         <defs>
           <radialGradient id={glowGrad} cx="50%" cy="42%" r="55%">
-            <stop offset="0%" stopColor="oklch(0.85 0.18 70 / 0.55)" />
-            <stop offset="70%" stopColor="oklch(0.78 0.16 60 / 0.12)" />
+            <stop offset="0%" stopColor="oklch(0.88 0.16 70 / 0.55)" />
+            <stop offset="70%" stopColor="oklch(0.78 0.14 60 / 0.12)" />
             <stop offset="100%" stopColor="oklch(0.16 0.01 50 / 0)" />
           </radialGradient>
-          <linearGradient id={bodyGrad} x1="30%" y1="10%" x2="80%" y2="95%">
-            <stop offset="0%" stopColor="oklch(0.88 0.12 75)" />
-            <stop offset="45%" stopColor="oklch(0.78 0.16 60)" />
-            <stop offset="100%" stopColor="oklch(0.62 0.14 55)" />
+          <linearGradient id={bodyGrad} x1="28%" y1="8%" x2="78%" y2="96%">
+            <stop offset="0%" stopColor="oklch(0.92 0.1 78)" />
+            <stop offset="42%" stopColor="oklch(0.8 0.15 62)" />
+            <stop offset="100%" stopColor="oklch(0.64 0.13 55)" />
           </linearGradient>
-          <radialGradient id={shineGrad} cx="35%" cy="28%" r="45%">
-            <stop offset="0%" stopColor="oklch(1 0.02 90 / 0.55)" />
+          <radialGradient id={shineGrad} cx="34%" cy="26%" r="42%">
+            <stop offset="0%" stopColor="oklch(1 0.02 90 / 0.62)" />
             <stop offset="100%" stopColor="oklch(1 0 0 / 0)" />
           </radialGradient>
         </defs>
 
         <circle cx="80" cy="80" r="72" fill={`url(#${glowGrad})`} />
 
-        <g className="director-blob__body">
-          {/* Organic blob — soft cloud / amoeba silhouette */}
+        <g ref={bodyRef} className="director-blob__body">
           <path
-            d="M80 28
-               C104 28 126 44 128 68
-               C130 90 116 112 96 122
-               C86 127 74 128 64 124
-               C42 116 30 96 32 74
-               C34 48 54 28 80 28 Z"
+            className="director-blob__silhouette"
+            d="M80 26
+               C106 26 128 44 130 70
+               C132 94 118 116 96 126
+               C86 131 74 132 62 127
+               C40 118 28 96 30 72
+               C32 46 54 26 80 26 Z"
             fill={`url(#${bodyGrad})`}
           />
-          {/* Soft wobble earlobe bumps */}
-          <ellipse cx="38" cy="78" rx="14" ry="18" fill={`url(#${bodyGrad})`} opacity="0.95" />
-          <ellipse cx="122" cy="78" rx="14" ry="18" fill={`url(#${bodyGrad})`} opacity="0.95" />
-          <ellipse cx="80" cy="42" rx="36" ry="28" fill={`url(#${shineGrad})`} />
+          <ellipse cx="36" cy="80" rx="15" ry="19" fill={`url(#${bodyGrad})`} opacity="0.96" />
+          <ellipse
+            className="director-blob__arm"
+            cx="124"
+            cy="80"
+            rx="15"
+            ry="19"
+            fill={`url(#${bodyGrad})`}
+            opacity="0.96"
+          />
+          <ellipse cx="80" cy="40" rx="38" ry="30" fill={`url(#${shineGrad})`} />
 
-          {/* Eyes group — blink + look */}
-          <g className="director-blob__eyes" style={{ transformOrigin: "80px 72px" }}>
-            <g className="director-blob__eye" transform={`translate(${80 - eyeGap}, 72)`}>
-              <ellipse
-                className="director-blob__eye-white"
-                cx="0"
-                cy="0"
-                rx="9"
-                ry={eyeOpen}
-                fill="oklch(0.98 0.01 90)"
-              />
-              <circle className="director-blob__pupil" cx="1.2" cy="1" r="3.4" fill="oklch(0.22 0.03 50)" />
-              <circle cx="-1.5" cy="-1.8" r="1.1" fill="oklch(1 0 0 / 0.85)" />
-            </g>
-            <g className="director-blob__eye" transform={`translate(${80 + eyeGap}, 72)`}>
-              <ellipse
-                className="director-blob__eye-white"
-                cx="0"
-                cy="0"
-                rx="9"
-                ry={eyeOpen}
-                fill="oklch(0.98 0.01 90)"
-              />
-              <circle className="director-blob__pupil" cx="1.2" cy="1" r="3.4" fill="oklch(0.22 0.03 50)" />
-              <circle cx="-1.5" cy="-1.8" r="1.1" fill="oklch(1 0 0 / 0.85)" />
-            </g>
-            {mood === "celebrate" && (
-              <>
-                <path
-                  d="M58 58 Q69 52 78 58"
-                  stroke="oklch(0.45 0.08 40)"
-                  strokeWidth="2"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M82 58 Q91 52 102 58"
-                  stroke="oklch(0.45 0.08 40)"
-                  strokeWidth="2"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              </>
-            )}
-          </g>
-
-          {/* Mouth */}
-          {mouth === "talk" ? (
-            <ellipse className="director-blob__mouth-talk" cx="80" cy="96" rx="7" ry="5.5" fill="oklch(0.32 0.06 30)" />
-          ) : mouth === "smile-big" ? (
+          {/* Cejas suaves */}
+          <g className="director-blob__brows">
             <path
-              d="M66 92 Q80 112 94 92"
-              stroke="oklch(0.32 0.05 40)"
-              strokeWidth="3"
+              className="director-blob__brow director-blob__brow--l"
+              d="M56 54 Q69 48 78 54"
+              stroke="oklch(0.42 0.07 45)"
+              strokeWidth="2.2"
               fill="none"
               strokeLinecap="round"
             />
-          ) : mouth === "soft" ? (
             <path
-              d="M70 98 Q80 104 90 98"
-              stroke="oklch(0.35 0.04 40)"
-              strokeWidth="2.4"
+              className="director-blob__brow director-blob__brow--r"
+              d="M82 54 Q91 48 104 54"
+              stroke="oklch(0.42 0.07 45)"
+              strokeWidth="2.2"
+              fill="none"
+              strokeLinecap="round"
+            />
+          </g>
+
+          {/* Ojos grandes */}
+          <g className="director-blob__eyes">
+            <g className="director-blob__eye director-blob__eye--l" transform="translate(68, 72)">
+              {happyEyes ? (
+                <path
+                  d="M-10 2 Q0 -8 10 2"
+                  stroke="oklch(0.28 0.04 50)"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <>
+                  <ellipse
+                    className="director-blob__eye-white"
+                    cx="0"
+                    cy="0"
+                    rx={eyeRx}
+                    ry={eyeRy}
+                    fill="oklch(0.99 0.01 95)"
+                  />
+                  <g ref={pupilLRef} className="director-blob__pupil-group">
+                    <circle cx="0" cy="0.6" r="4.4" fill="oklch(0.24 0.04 50)" />
+                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="oklch(1 0 0 / 0.95)" />
+                    <circle cx="1.6" cy="1.2" r="0.7" fill="oklch(1 0 0 / 0.45)" />
+                  </g>
+                </>
+              )}
+            </g>
+            <g className="director-blob__eye director-blob__eye--r" transform="translate(92, 72)">
+              {happyEyes ? (
+                <path
+                  d="M-10 2 Q0 -8 10 2"
+                  stroke="oklch(0.28 0.04 50)"
+                  strokeWidth="3"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              ) : (
+                <>
+                  <ellipse
+                    className="director-blob__eye-white director-blob__eye-white--r"
+                    cx="0"
+                    cy="0"
+                    rx={eyeRx}
+                    ry={eyeRy}
+                    fill="oklch(0.99 0.01 95)"
+                  />
+                  <g ref={pupilRRef} className="director-blob__pupil-group">
+                    <circle cx="0" cy="0.6" r="4.4" fill="oklch(0.24 0.04 50)" />
+                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="oklch(1 0 0 / 0.95)" />
+                    <circle cx="1.6" cy="1.2" r="0.7" fill="oklch(1 0 0 / 0.45)" />
+                  </g>
+                </>
+              )}
+            </g>
+          </g>
+
+          {/* Mejillas rosadas */}
+          <ellipse
+            className="director-blob__cheek"
+            cx="52"
+            cy="90"
+            rx="8"
+            ry="5"
+            fill={mood === "coach" ? "oklch(0.78 0.1 25 / 0.42)" : "oklch(0.74 0.14 25 / 0.45)"}
+          />
+          <ellipse
+            className="director-blob__cheek"
+            cx="108"
+            cy="90"
+            rx="8"
+            ry="5"
+            fill={mood === "coach" ? "oklch(0.78 0.1 25 / 0.42)" : "oklch(0.74 0.14 25 / 0.45)"}
+          />
+
+          {/* Boca */}
+          {mood === "speaking" ? (
+            <ellipse
+              className="director-blob__mouth-talk"
+              cx="80"
+              cy="100"
+              rx="7.5"
+              ry="6"
+              fill="oklch(0.32 0.06 30)"
+            />
+          ) : mood === "celebrate" ? (
+            <path
+              d="M64 94 Q80 118 96 94"
+              stroke="oklch(0.3 0.05 40)"
+              strokeWidth="3.2"
+              fill="none"
+              strokeLinecap="round"
+            />
+          ) : mood === "coach" ? (
+            <path
+              d="M68 100 Q80 108 92 100"
+              stroke="oklch(0.34 0.05 40)"
+              strokeWidth="2.6"
               fill="none"
               strokeLinecap="round"
             />
           ) : (
             <path
-              d="M68 94 Q80 106 92 94"
-              stroke="oklch(0.32 0.05 40)"
-              strokeWidth="2.6"
+              className="director-blob__smile"
+              d="M66 96 Q80 112 94 96"
+              stroke="oklch(0.3 0.05 40)"
+              strokeWidth="2.8"
               fill="none"
               strokeLinecap="round"
             />
-          )}
-
-          {/* Cheek blush when celebrate / idle */}
-          {(mood === "celebrate" || mood === "idle") && (
-            <>
-              <ellipse cx="54" cy="88" rx="7" ry="4" fill="oklch(0.72 0.12 25 / 0.35)" />
-              <ellipse cx="106" cy="88" rx="7" ry="4" fill="oklch(0.72 0.12 25 / 0.35)" />
-            </>
           )}
         </g>
       </svg>

@@ -237,7 +237,7 @@ function Finalizado() {
           <DirectorAvatar
             mode="feedback"
             text={feedback}
-            score={overall}
+            score={mode === "lectura" ? undefined : overall}
             sourceLabel={feedbackSourceLabel(localReport?.feedbackSource)}
             className="mt-4"
           />
