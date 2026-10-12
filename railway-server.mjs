@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, isAbsolute, normalize, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -11,8 +11,21 @@ const entryPath = existsSync(serverEntry) ? serverEntry : legacyEntry;
 if (!existsSync(entryPath)) {
   throw new Error(`No se encontro el servidor SSR en dist/server (buscado server.js e index.js).`);
 }
+const ogImagePath = resolve(clientDir, "og-ensaya-ia.jpg");
+if (!existsSync(ogImagePath)) {
+  console.warn(
+    `[railway-server] AVISO: falta dist/client/og-ensaya-ia.jpg (public/ no copiado al build).`,
+  );
+} else {
+  console.log(`[railway-server] OG listo: dist/client/og-ensaya-ia.jpg`);
+}
 const worker = (await import(pathToFileURL(entryPath).href)).default;
 const port = Number(process.env.PORT ?? 3000);
+
+function isInsideClientDir(filePath) {
+  const rel = relative(clientDir, filePath);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
 
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
@@ -33,9 +46,9 @@ const contentTypes = {
 
 function getStaticFile(pathname) {
   const decoded = decodeURIComponent(pathname);
-  const normalized = normalize(decoded).replace(/^(\.\.[/\\])+/, "");
-  const filePath = resolve(join(clientDir, normalized));
-  if (!filePath.startsWith(clientDir) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+  const normalized = normalize(decoded).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
+  const filePath = resolve(clientDir, normalized);
+  if (!isInsideClientDir(filePath) || !existsSync(filePath) || !statSync(filePath).isFile()) {
     return null;
   }
   return filePath;

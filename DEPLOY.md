@@ -42,12 +42,40 @@ La version entregada en junio 2026 corre en Railway con `npm run start` (`railwa
 
 ### Railway (como la ultima version desplegada)
 
-1. `npm run build`
-2. En Railway: Build `npm run build`, Start `npm run start`
-3. Variable `VITE_REQUIRE_AUTH=true` (y las de Supabase solo si ya resuelven)
-4. El microfono exige HTTPS en el dominio publico
+Config en repo (`railway.toml`):
+
+- Builder: **RAILPACK**
+- Build: `npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs`
+- Start: `npm run start` → `node railway-server.mjs` (sirve SSR + `dist/client`, incl. `public/` → `/og-ensaya-ia.jpg`)
+- Node: `engines.node >= 22.12` (tambien `.node-version` / `.nvmrc`)
+- Healthcheck: `GET /og-ensaya-ia.jpg` (el deploy nuevo debe traer la imagen)
+
+Pasos:
+
+1. En local: `npm ci && npm run build && npm run verify:dist`
+2. Confirma que el **panel del servicio** no tenga Build/Start distintos que pisen `railway.toml` (si hay override, alínealos o bórralos).
+3. Variables: `VITE_REQUIRE_AUTH=true`, `AI_PROVIDER=gemini`, `GEMINI_API_KEY=...` (y Supabase solo si ya resuelven). Opcional: `RAILPACK_NODE_VERSION=22.12.0`.
+4. El microfono exige HTTPS en el dominio publico.
 
 URL actual: https://ensaya-ia-production.up.railway.app
+
+#### Verificar que el despliegue usa el ultimo commit
+
+1. En GitHub: copia el hash corto de `main` (`git rev-parse --short HEAD`, hoy debe coincidir con lo que ves en el repo).
+2. En Railway → tu servicio → **Deployments**.
+3. Abre el deploy **Success** mas reciente y compara el commit hash / mensaje con `main`.
+4. Comprueba en vivo:
+   - HTML: View Source — `og:image` debe ser `https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg` (no `storage.googleapis.com/...` ni `twitter:site` `@Lovable`).
+   - `curl -sI https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg` → `200` y `Content-Type: image/jpeg`.
+
+Si el HTML sigue con marca Lovable o el OG da 404, Railway esta sirviendo un **deploy anterior** (suele pasar cuando los builds nuevos fallan y no reemplazan el que esta en vivo).
+
+#### Forzar un redeploy
+
+1. Railway → Deployments → **Redeploy** en el deploy del commit correcto (o **Deploy** → branch `main`).
+2. Si el build esta cacheado/roto: Variables → agrega temporalmente `NO_CACHE=1`, redeploy, luego quítala.
+3. Revisa los **Build Logs**: debe verse Node ≥ 22.12, `vite build`, y `verify-railway-dist` OK con `dist/client/og-ensaya-ia.jpg`.
+4. Si el build falla (p. ej. `vite: not found`), confirma que el Build Command incluye `npm ci --include=dev` y que Vite esta en `dependencies` (como en este repo).
 
 ### A) Cloudflare Workers (recomendado para este repo)
 
