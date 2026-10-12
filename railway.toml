@@ -1,16 +1,15 @@
-# Deploy Ensaya IA en Railway (Railpack).
-# Si el panel del servicio define Build/Start distintos, prevalece el panel:
-# alinea esos campos con este archivo o vacía el override del dashboard.
+# Deploy Ensaya IA en Railway.
+# Preferencia: Dockerfile en la raiz (Node 22.12 + verify dist). Si el panel fuerza
+# Railpack, usa el buildCommand de abajo. Overrides del dashboard pisan este archivo.
 
 [build]
-builder = "RAILPACK"
-# --include=dev: Vite vive en devDependencies y debe instalarse en el build.
-# verify: aborta si public/og no llego a dist/client (evita publicar un artefacto roto).
-buildCommand = "npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+# Fallback si el servicio usa Railpack en vez del Dockerfile:
+# buildCommand = "npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs"
 
 [deploy]
-startCommand = "npm run start"
-# Si falta la imagen OG, el deploy nuevo no pasa healthcheck (no sustituye un build bueno a medias).
+startCommand = "node railway-server.mjs"
 healthcheckPath = "/og-ensaya-ia.jpg"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

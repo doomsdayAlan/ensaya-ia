@@ -42,13 +42,13 @@ La version entregada en junio 2026 corre en Railway con `npm run start` (`railwa
 
 ### Railway (como la ultima version desplegada)
 
-Config en repo (`railway.toml`):
+Config en repo (`railway.toml` + `Dockerfile`):
 
-- Builder: **RAILPACK**
-- Build: `npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs`
-- Start: `npm run start` → `node railway-server.mjs` (sirve SSR + `dist/client`, incl. `public/` → `/og-ensaya-ia.jpg`)
+- Builder preferido: **DOCKERFILE** (`Dockerfile` con Node **22.12**, `npm ci`, `vite build`, `verify-railway-dist`)
+- Start: `node railway-server.mjs` (sirve SSR + `dist/client`, incl. `public/` → `/og-ensaya-ia.jpg`)
 - Node: `engines.node >= 22.12` (tambien `.node-version` / `.nvmrc`)
 - Healthcheck: `GET /og-ensaya-ia.jpg` (el deploy nuevo debe traer la imagen)
+- Si el panel sigue en Railpack: Build `npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs`
 
 Pasos:
 
@@ -74,8 +74,9 @@ Si el HTML sigue con marca Lovable o el OG da 404, Railway esta sirviendo un **d
 
 1. Railway → Deployments → **Redeploy** en el deploy del commit correcto (o **Deploy** → branch `main`).
 2. Si el build esta cacheado/roto: Variables → agrega temporalmente `NO_CACHE=1`, redeploy, luego quítala.
-3. Revisa los **Build Logs**: debe verse Node ≥ 22.12, `vite build`, y `verify-railway-dist` OK con `dist/client/og-ensaya-ia.jpg`.
-4. Si el build falla (p. ej. `vite: not found`), confirma que el Build Command incluye `npm ci --include=dev` y que Vite esta en `dependencies` (como en este repo).
+3. Revisa los **Build Logs**: debe verse Node 22.12 (imagen Docker o Railpack), `vite build`, y `verify-railway-dist` OK con `dist/client/og-ensaya-ia.jpg`.
+4. Si el build falla (p. ej. `vite: not found`), usa el **Dockerfile** del repo (Settings → Build → Builder = Dockerfile) o un Build Command con `npm ci --include=dev`.
+5. Confirma que el servicio apunta al repo `doomsdayAlan/ensaya-ia`, branch **main**, Root Directory vacio (`/`).
 
 ### A) Cloudflare Workers (recomendado para este repo)
 
