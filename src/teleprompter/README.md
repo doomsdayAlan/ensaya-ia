@@ -27,12 +27,12 @@ Documentación interactiva: `http://localhost:8000/docs`
 
 ## Variables de entorno
 
-| Variable         | Default           | Descripción                         |
-|------------------|-------------------|-------------------------------------|
-| `DB_PATH`        | `teleprompter.db` | Ruta a la base SQLite               |
-| `RECORDINGS_DIR` | `recordings/`     | Carpeta donde se guardan los WAVs   |
+| Variable         | Default           | Descripción                                 |
+| ---------------- | ----------------- | ------------------------------------------- |
+| `DB_PATH`        | `teleprompter.db` | Ruta a la base SQLite                       |
+| `RECORDINGS_DIR` | `recordings/`     | Carpeta donde se guardan los WAVs           |
 | `WHISPER_MODEL`  | `small`           | Tamaño del modelo (tiny/small/medium/large) |
-| `WHISPER_LANG`   | `es`              | Idioma del guion                    |
+| `WHISPER_LANG`   | `es`              | Idioma del guion                            |
 
 ---
 
@@ -127,18 +127,20 @@ el frontend puede:
 ```js
 // En el WebSocket message handler:
 if (msg.event === "playback_start") {
-  const url = `/recordings/${sessionId}_seg${segmentIndex}_*.wav`
+  const url = `/recordings/${sessionId}_seg${segmentIndex}_*.wav`;
   // Mejor: obtén la URL del evento missing_audio o de GET /recording/{session}/{char}
-  const audio = new Audio(audioUrl)
-  audio.play()
+  const audio = new Audio(audioUrl);
+  audio.play();
 }
 ```
 
 Para que el frontend controle la reproducción, llama primero a:
+
 ```
 GET /recording/{session_id}/{character}
 → lista de { segment_index, audio_url, ... }
 ```
+
 y cachea las URLs en el cliente.
 
 ---

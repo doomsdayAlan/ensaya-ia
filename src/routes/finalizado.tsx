@@ -37,7 +37,9 @@ export const Route = createFileRoute("/finalizado")({
 
 function readSearchParam(search: unknown, key: string): string | undefined {
   if (typeof search === "string") {
-    return new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined;
+    return (
+      new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined
+    );
   }
   if (search && typeof search === "object" && key in search) {
     const value = (search as Record<string, unknown>)[key];
@@ -52,7 +54,7 @@ function Finalizado() {
     select: (state) =>
       readSearchParam(state.location.search, "id") ??
       (typeof state.location.searchStr === "string"
-        ? new URLSearchParams(state.location.searchStr).get("id") ?? undefined
+        ? (new URLSearchParams(state.location.searchStr).get("id") ?? undefined)
         : undefined),
   });
   const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
@@ -92,7 +94,9 @@ function Finalizado() {
     localReport?.score ??
     report?.score ??
     (measuredScores.length
-      ? Math.round(measuredScores.reduce((sum, item) => sum + item.value, 0) / measuredScores.length)
+      ? Math.round(
+          measuredScores.reduce((sum, item) => sum + item.value, 0) / measuredScores.length,
+        )
       : 0);
   const r = 56;
   const c = 2 * Math.PI * r;
@@ -102,18 +106,23 @@ function Finalizado() {
   const completedPercent = Math.min(100, Math.round((completed / total) * 100));
   const scriptTitle = localReport?.scriptTitle ?? report?.script?.title ?? "Sin libreto";
   const sceneTitle = localReport?.sceneTitle ?? report?.scene?.title ?? "Sin escena";
-  const sceneLocation = localReport?.sceneLocation ?? report?.scene?.location ?? report?.scene?.description ?? "";
+  const sceneLocation =
+    localReport?.sceneLocation ?? report?.scene?.location ?? report?.scene?.description ?? "";
   const characterName = localReport?.characterName ?? report?.selectedCharacter?.name;
   const mode = localReport?.mode ?? report?.mode ?? "individual";
   const difficulty = localReport?.aiDifficulty ?? report?.ai_difficulty ?? 50;
   const startedAt = localReport?.startedAt ?? report?.started_at;
   const endedAt = localReport?.endedAt ?? report?.ended_at ?? null;
   const feedback =
-    localReport?.feedback ?? report?.feedback_summary ?? "Completa un ensayo para generar retroalimentacion.";
+    localReport?.feedback ??
+    report?.feedback_summary ??
+    "Completa un ensayo para generar retroalimentacion.";
   const skipped = localReport?.skippedLines ?? report?.skipped_lines ?? 0;
   const repeated = localReport?.repeatedLines ?? report?.repeated_lines ?? 0;
   const highlights =
-    report && "highlights" in report && Array.isArray((report as { highlights?: unknown }).highlights)
+    report &&
+    "highlights" in report &&
+    Array.isArray((report as { highlights?: unknown }).highlights)
       ? (report as { highlights: { id: string; event_time: string; note: string }[] }).highlights
       : [];
 
@@ -258,18 +267,8 @@ function Finalizado() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <Stat icon={Check} value={`${completed}`} label="Lineas acertadas" tone="success" />
-            <Stat
-              icon={RotateCcw}
-              value={`${repeated}`}
-              label="Lineas repetidas"
-              tone="primary"
-            />
-            <Stat
-              icon={X}
-              value={`${skipped}`}
-              label="Lineas omitidas"
-              tone="destructive"
-            />
+            <Stat icon={RotateCcw} value={`${repeated}`} label="Lineas repetidas" tone="primary" />
+            <Stat icon={X} value={`${skipped}`} label="Lineas omitidas" tone="destructive" />
           </div>
         </div>
 
@@ -330,7 +329,9 @@ function Finalizado() {
                 toast.error("No hay reporte para exportar.");
                 return;
               }
-              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+              const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                type: "application/json",
+              });
               const url = URL.createObjectURL(blob);
               const link = document.createElement("a");
               link.href = url;

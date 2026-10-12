@@ -86,7 +86,9 @@ function Ensayo() {
     setActiveConfig(loadActiveRehearsal());
     setSessionReady(true);
   }, []);
-  const [connectionStatus, setConnectionStatus] = useState("Pulsa el microfono para comenzar el ensayo con IA.");
+  const [connectionStatus, setConnectionStatus] = useState(
+    "Pulsa el microfono para comenzar el ensayo con IA.",
+  );
   const [isRehearsing, setIsRehearsing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -303,6 +305,8 @@ function Ensayo() {
     setIsListening(false);
     stopTake();
   };
+  const stopListenRef = useRef(stopListen);
+  stopListenRef.current = stopListen;
 
   const finishRehearsal = async (reason: "done" | "manual") => {
     stopListen();
@@ -429,7 +433,8 @@ function Ensayo() {
         score,
         feedback_summary: feedback,
         teleprompter_status: "stopped",
-        teleprompter_last_event: reason === "done" ? "Escena completada con IA local." : "Ensayo finalizado.",
+        teleprompter_last_event:
+          reason === "done" ? "Escena completada con IA local." : "Ensayo finalizado.",
       }).catch(() => null);
     }
 
@@ -493,7 +498,9 @@ function Ensayo() {
     accumulatedFinalRef.current = "";
     listenRef.current?.reset();
     if (verdict.close || fromTyping) {
-      setConnectionStatus(`Casi... ${verdict.percent}%. Sigue hablando o escribe las palabras clave.`);
+      setConnectionStatus(
+        `Casi... ${verdict.percent}%. Sigue hablando o escribe las palabras clave.`,
+      );
     }
     return false;
   };
@@ -505,9 +512,7 @@ function Ensayo() {
     if (isLecturaMode) {
       const character = currentLine.character;
       const emotionHint =
-        suggestEmotions && character?.base_emotion
-          ? ` · emocion: ${character.base_emotion}`
-          : "";
+        suggestEmotions && character?.base_emotion ? ` · emocion: ${character.base_emotion}` : "";
       setConnectionStatus(
         isMyTurn
           ? `Lectura: tu linea (${character?.name ?? "Tu"})${emotionHint}`
@@ -549,7 +554,9 @@ function Ensayo() {
       setIsSpeaking(false);
       stopSpeaking();
       if (!canUseSpeechRecognition()) {
-        setConnectionStatus("Este navegador no reconoce voz. Usa Chrome o Edge, o avanza la linea a mano.");
+        setConnectionStatus(
+          "Este navegador no reconoce voz. Usa Chrome o Edge, o avanza la linea a mano.",
+        );
         return;
       }
       setConnectionStatus("Tu turno. Di la linea en voz alta.");
@@ -631,7 +638,9 @@ function Ensayo() {
       .catch((error) => {
         if (cancelled) return;
         setIsSpeaking(false);
-        setConnectionStatus(error instanceof Error ? error.message : "No se pudo hablar la linea de IA.");
+        setConnectionStatus(
+          error instanceof Error ? error.message : "No se pudo hablar la linea de IA.",
+        );
       });
 
     return () => {
@@ -639,11 +648,20 @@ function Ensayo() {
       stopSpeaking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRehearsing, activeLineIndex, currentLine?.id, isMyTurn, isLecturaMode, preferredVoice, suggestEmotions, useProfileVoiceForAll]);
+  }, [
+    isRehearsing,
+    activeLineIndex,
+    currentLine?.id,
+    isMyTurn,
+    isLecturaMode,
+    preferredVoice,
+    suggestEmotions,
+    useProfileVoiceForAll,
+  ]);
 
   useEffect(() => {
     return () => {
-      stopListen();
+      stopListenRef.current();
       stopSpeaking();
     };
   }, []);
@@ -743,8 +761,8 @@ function Ensayo() {
 
       {!speechOk && !isLecturaMode && (
         <div className="bg-card border border-primary/40 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
-          Para que la IA te escuche y hable, abre la app en Chrome o Edge. Puedes avanzar lineas a mano si el
-          reconocimiento no esta disponible.
+          Para que la IA te escuche y hable, abre la app en Chrome o Edge. Puedes avanzar lineas a
+          mano si el reconocimiento no esta disponible.
         </div>
       )}
 
@@ -763,14 +781,18 @@ function Ensayo() {
         <div className="flex items-center gap-2 ml-auto sm:ml-0">
           <Crown className="w-5 h-5 text-primary" />
           <div>
-            <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">Interpretas</div>
+            <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+              Interpretas
+            </div>
             <div className="text-sm">
               {selectedCharacter ? `${selectedCharacter.name} (Tu)` : "Sin personaje"}
             </div>
           </div>
         </div>
         <div className="text-xs leading-relaxed">
-          <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-0.5">Modo</div>
+          <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-0.5">
+            Modo
+          </div>
           <div>
             Realismo: <span className="text-primary">{difficultyLabel(difficulty)}</span>
           </div>
@@ -796,8 +818,17 @@ function Ensayo() {
             active
             speaking={isSpeaking && !isMyTurn}
           />
-          <LineCard title="Siguiente linea" line={nextLine} selectedCharacterId={selectedCharacterId} />
-          <LineCard title="Despues" line={afterLine} selectedCharacterId={selectedCharacterId} faded />
+          <LineCard
+            title="Siguiente linea"
+            line={nextLine}
+            selectedCharacterId={selectedCharacterId}
+          />
+          <LineCard
+            title="Despues"
+            line={afterLine}
+            selectedCharacterId={selectedCharacterId}
+            faded
+          />
 
           <div className="bg-card border border-border/60 rounded-xl p-4 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs">
@@ -805,7 +836,13 @@ function Ensayo() {
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${isListening || isSpeaking ? "bg-destructive animate-pulse" : "bg-success"}`}
                 />{" "}
-                {isSpeaking ? "IA hablando" : isListening ? "Escuchando" : isRehearsing ? "En ensayo" : "Listo"}
+                {isSpeaking
+                  ? "IA hablando"
+                  : isListening
+                    ? "Escuchando"
+                    : isRehearsing
+                      ? "En ensayo"
+                      : "Listo"}
               </div>
               <div className="font-mono text-foreground mt-0.5">{connectionStatus}</div>
               {transcript && (
@@ -913,14 +950,22 @@ function Ensayo() {
           </Card>
 
           <Card title="IA en vivo">
-            <Quick label="Motor de voz" value={speechOk || isLecturaMode ? "Navegador" : "No disponible"} />
-            <Quick label="Turno actual" value={isLecturaMode ? "Lectura TTS" : isMyTurn ? "Tu turno" : "IA habla"} />
+            <Quick
+              label="Motor de voz"
+              value={speechOk || isLecturaMode ? "Navegador" : "No disponible"}
+            />
+            <Quick
+              label="Turno actual"
+              value={isLecturaMode ? "Lectura TTS" : isMyTurn ? "Tu turno" : "IA habla"}
+            />
             <Quick
               label="Coincidencia"
               value={lastScore === null ? "—" : `${Math.round(lastScore * 100)}%`}
             />
             <div className="mt-3 rounded-lg border border-border/60 bg-surface p-3">
-              <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">Estado</div>
+              <div className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">
+                Estado
+              </div>
               <p className="text-xs leading-relaxed text-foreground min-h-10">
                 {isLecturaMode
                   ? "Modo lectura: se reproducen todas las lineas con la voz del navegador."
@@ -941,7 +986,10 @@ function Ensayo() {
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-surface overflow-hidden">
-              <div className="h-full bg-primary-gradient transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full bg-primary-gradient transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </Card>
         </aside>
@@ -998,7 +1046,9 @@ function LineCard({
             {line.cue && <div className="text-xs text-primary/80 text-right mt-2">{line.cue}</div>}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No hay linea registrada para esta posicion.</p>
+          <p className="text-sm text-muted-foreground">
+            No hay linea registrada para esta posicion.
+          </p>
         )}
       </div>
     </div>
@@ -1061,7 +1111,11 @@ function CharRow({
           {status} <Wave active={playing} />
         </div>
       </div>
-      {muted ? <MicOff className="w-4 h-4 text-muted-foreground" /> : <Volume2 className="w-4 h-4 text-primary" />}
+      {muted ? (
+        <MicOff className="w-4 h-4 text-muted-foreground" />
+      ) : (
+        <Volume2 className="w-4 h-4 text-primary" />
+      )}
     </div>
   );
 }

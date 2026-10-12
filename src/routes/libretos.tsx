@@ -108,13 +108,13 @@ function Libretos() {
         if (activeTab === "Favoritos")
           return Boolean(
             script.is_favorite &&
-              (script.user_id === currentUserId || script.is_public || script.source_type === "seed"),
+            (script.user_id === currentUserId || script.is_public || script.source_type === "seed"),
           );
         // "Todos": solo del usuario en sesion + demos/publicos explicitos.
         return Boolean(
           (currentUserId && script.user_id === currentUserId) ||
-            script.is_public ||
-            script.source_type === "seed",
+          script.is_public ||
+          script.source_type === "seed",
         );
       })
       .filter((script) => {

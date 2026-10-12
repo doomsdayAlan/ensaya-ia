@@ -46,7 +46,9 @@ const contentTypes = {
 
 function getStaticFile(pathname) {
   const decoded = decodeURIComponent(pathname);
-  const normalized = normalize(decoded).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
+  const normalized = normalize(decoded)
+    .replace(/^(\.\.[/\\])+/, "")
+    .replace(/^[/\\]+/, "");
   const filePath = resolve(clientDir, normalized);
   if (!isInsideClientDir(filePath) || !existsSync(filePath) || !statSync(filePath).isFile()) {
     return null;

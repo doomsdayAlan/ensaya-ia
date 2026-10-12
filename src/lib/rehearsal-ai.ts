@@ -78,12 +78,16 @@ export function pickVoice(preferred?: string | null) {
 
 /** rate/pitch segun emocion base del personaje (modo "sugerir emociones"). */
 export function emotionProsody(emotion?: string | null): { rate: number; pitch: number } {
-  const e = (emotion ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const e = (emotion ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   if (/aleg|felic|goz|eufor|excit/.test(e)) return { rate: 1.08, pitch: 1.18 };
   if (/trist|melanc|dolor|llor|pena/.test(e)) return { rate: 0.86, pitch: 0.82 };
   if (/enoj|ira|rabia|fur|molest/.test(e)) return { rate: 1.12, pitch: 0.88 };
   if (/mied|temor|ansie|nerv|preocup/.test(e)) return { rate: 1.06, pitch: 1.22 };
-  if (/romant|amor|ternur|carin|cariñ|pasion|pasión|enamor/.test(e)) return { rate: 0.9, pitch: 1.12 };
+  if (/romant|amor|ternur|carin|cariñ|pasion|pasión|enamor/.test(e))
+    return { rate: 0.9, pitch: 1.12 };
   if (/calma|seren|neut|tranquil/.test(e)) return { rate: 0.94, pitch: 1 };
   return { rate: 0.96, pitch: 1 };
 }
@@ -155,7 +159,9 @@ export function stopSpeaking() {
 
 function collectTranscripts(result: BrowserSpeechRecognitionEvent["results"][number]) {
   const count = result.length ?? 1;
-  return Array.from({ length: count }, (_, index) => result[index]?.transcript ?? "").filter(Boolean);
+  return Array.from({ length: count }, (_, index) => result[index]?.transcript ?? "").filter(
+    Boolean,
+  );
 }
 
 export function listenForLine(options: {
@@ -216,7 +222,9 @@ export function listenForLine(options: {
   try {
     recognition.start();
   } catch (error) {
-    options.onError?.(error instanceof Error ? error.message : "No se pudo iniciar el reconocimiento de voz.");
+    options.onError?.(
+      error instanceof Error ? error.message : "No se pudo iniciar el reconocimiento de voz.",
+    );
     return null;
   }
 

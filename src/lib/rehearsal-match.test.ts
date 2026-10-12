@@ -6,8 +6,7 @@ import {
   scoreRehearsal,
 } from "./rehearsal-match.ts";
 
-const expected =
-  "De que luz se alimenta esa ventana? Es el este, y Julieta es el sol!";
+const expected = "De que luz se alimenta esa ventana? Es el este, y Julieta es el sol!";
 
 const cases: Array<[string, number, string]> = [
   [expected, 0.99, "linea completa"],
@@ -34,7 +33,10 @@ for (const [spoken, minScore, label] of cases) {
   assert(ok, `${label}: ${score.toFixed(3)}`);
 }
 
-assert(matchThreshold(20) === 0.28 && matchThreshold(50) === 0.36 && matchThreshold(80) === 0.48, "umbrales");
+assert(
+  matchThreshold(20) === 0.28 && matchThreshold(50) === 0.36 && matchThreshold(80) === 0.48,
+  "umbrales",
+);
 assert(normalizeSpeech("¿Hola, Julieta!") === "hola julieta", "normalizeSpeech quita puntuacion");
 assert(normalizeSpeech("lluvia verde") === "yubia berde", "normalize v/b y ll/y");
 

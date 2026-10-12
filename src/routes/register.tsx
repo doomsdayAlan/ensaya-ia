@@ -4,7 +4,8 @@ import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthShell, Field } from "@/components/AuthShell";
-import { DemoAccountButton, goAfterLogin } from "@/components/DemoAccountButton";
+import { DemoAccountButton } from "@/components/DemoAccountButton";
+import { goAfterLogin } from "@/lib/app-config";
 import { useAuth } from "@/hooks/useAuth";
 import { registerLocalAccount } from "@/lib/local-auth";
 

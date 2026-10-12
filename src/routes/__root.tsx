@@ -75,16 +75,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
-      { name: "description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
+      {
+        name: "description",
+        content:
+          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+      },
       { name: "author", content: APP_NAME },
       { property: "og:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
-      { property: "og:description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
+      {
+        property: "og:description",
+        content:
+          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
-      { name: "twitter:description", content: "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles." },
-      { property: "og:image", content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg" },
-      { name: "twitter:image", content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg" },
+      {
+        name: "twitter:title",
+        content: `${APP_NAME} — Ensayo teatral con inteligencia artificial`,
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+      },
+      {
+        property: "og:image",
+        content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg",
+      },
+      {
+        name: "twitter:image",
+        content: "https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -104,7 +125,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es-MX">
       <head>
         <HeadContent />
       </head>

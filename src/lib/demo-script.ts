@@ -1,4 +1,9 @@
-import type { CharacterRecord, SceneRecord, ScriptLineWithCharacter, ScriptRecord } from "@/lib/rehearsal-data";
+import type {
+  CharacterRecord,
+  SceneRecord,
+  ScriptLineWithCharacter,
+  ScriptRecord,
+} from "@/lib/rehearsal-data";
 import type { ScriptSetup } from "@/lib/rehearsal-data";
 
 const now = "2026-01-01T00:00:00.000Z";
@@ -63,57 +68,63 @@ export const DEMO_CHARACTERS: CharacterRecord[] = [
   },
 ];
 
-const LINES: Array<{ id: string; characterId: string; order: number; text: string; cue: string; duration: number }> =
-  [
-    {
-      id: "00000000-0000-4000-8000-000000000501",
-      characterId: DEMO_ROMEO_ID,
-      order: 1,
-      text: "De que luz se alimenta esa ventana? Es el este, y Julieta es el sol!",
-      cue: "Tu linea. Habla en voz alta.",
-      duration: 6,
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000502",
-      characterId: DEMO_JULIETA_ID,
-      order: 2,
-      text: "Es Romeo, y Romeo es el mismo! Ah, Romeo, por que eres tu Romeo!",
-      cue: "La IA interpreta a Julieta.",
-      duration: 4,
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000503",
-      characterId: DEMO_ROMEO_ID,
-      order: 3,
-      text: "Niega a tu padre y rehusa tu nombre; o, si no quieres, jura que me amas.",
-      cue: "Retoma con intencion romantica.",
-      duration: 6,
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000504",
-      characterId: DEMO_JULIETA_ID,
-      order: 4,
-      text: "Solo tu nombre es mi enemigo; tu eres tu mismo, aunque no seas Montesco.",
-      cue: "Mantener pausa dramatica.",
-      duration: 6,
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000505",
-      characterId: DEMO_ROMEO_ID,
-      order: 5,
-      text: "Con un nombre no se que decirte quien soy; mi nombre, santa querida, me es odioso.",
-      cue: "Sube la emocion sin perder claridad.",
-      duration: 6,
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000506",
-      characterId: DEMO_JULIETA_ID,
-      order: 6,
-      text: "Mis oidos aun no han bebido cien palabras de tu boca, y ya conozco el sonido.",
-      cue: "Cerrar con ternura.",
-      duration: 5,
-    },
-  ];
+const LINES: Array<{
+  id: string;
+  characterId: string;
+  order: number;
+  text: string;
+  cue: string;
+  duration: number;
+}> = [
+  {
+    id: "00000000-0000-4000-8000-000000000501",
+    characterId: DEMO_ROMEO_ID,
+    order: 1,
+    text: "De que luz se alimenta esa ventana? Es el este, y Julieta es el sol!",
+    cue: "Tu linea. Habla en voz alta.",
+    duration: 6,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000502",
+    characterId: DEMO_JULIETA_ID,
+    order: 2,
+    text: "Es Romeo, y Romeo es el mismo! Ah, Romeo, por que eres tu Romeo!",
+    cue: "La IA interpreta a Julieta.",
+    duration: 4,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000503",
+    characterId: DEMO_ROMEO_ID,
+    order: 3,
+    text: "Niega a tu padre y rehusa tu nombre; o, si no quieres, jura que me amas.",
+    cue: "Retoma con intencion romantica.",
+    duration: 6,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000504",
+    characterId: DEMO_JULIETA_ID,
+    order: 4,
+    text: "Solo tu nombre es mi enemigo; tu eres tu mismo, aunque no seas Montesco.",
+    cue: "Mantener pausa dramatica.",
+    duration: 6,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000505",
+    characterId: DEMO_ROMEO_ID,
+    order: 5,
+    text: "Con un nombre no se que decirte quien soy; mi nombre, santa querida, me es odioso.",
+    cue: "Sube la emocion sin perder claridad.",
+    duration: 6,
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000506",
+    characterId: DEMO_JULIETA_ID,
+    order: 6,
+    text: "Mis oidos aun no han bebido cien palabras de tu boca, y ya conozco el sonido.",
+    cue: "Cerrar con ternura.",
+    duration: 5,
+  },
+];
 
 export const DEMO_LINES: ScriptLineWithCharacter[] = LINES.map((line) => {
   const character = DEMO_CHARACTERS.find((item) => item.id === line.characterId) ?? null;

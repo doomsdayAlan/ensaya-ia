@@ -11,8 +11,7 @@ export function feedbackSystemPrompt() {
 }
 
 export function feedbackUserPrompt(input: RehearsalFeedbackInput) {
-  const difficulty =
-    input.difficulty < 33 ? "facil" : input.difficulty < 66 ? "media" : "alta";
+  const difficulty = input.difficulty < 33 ? "facil" : input.difficulty < 66 ? "media" : "alta";
   const isLectura = (input.mode ?? "").toLowerCase() === "lectura";
 
   // scriptTitle / sceneTitle / characterName son contexto explicito enviado al LLM

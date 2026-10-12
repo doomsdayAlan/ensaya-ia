@@ -104,7 +104,8 @@ function Configuracion() {
       )}
       {data && !data.isAuthenticated && (
         <div className="bg-card border border-primary/30 rounded-xl p-4 text-sm text-muted-foreground mb-5">
-          Estas viendo valores de invitado. Inicia sesion para guardar tu perfil en este dispositivo.
+          Estas viendo valores de invitado. Inicia sesion para guardar tu perfil en este
+          dispositivo.
         </div>
       )}
 
@@ -172,7 +173,8 @@ function Configuracion() {
                 <div>
                   <h3 className="font-medium">Base de datos de cuentas</h3>
                   <p className="text-sm text-muted-foreground">
-                    IndexedDB en este navegador (tablas users y perfil_usuario). {storedUsers} cuenta
+                    IndexedDB en este navegador (tablas users y perfil_usuario). {storedUsers}{" "}
+                    cuenta
                     {storedUsers === 1 ? "" : "s"} guardada{storedUsers === 1 ? "" : "s"}.
                   </p>
                 </div>

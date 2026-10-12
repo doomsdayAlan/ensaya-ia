@@ -7,10 +7,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const checks = [
-  "dist/client/og-ensaya-ia.jpg",
-  "dist/server/server.js",
-];
+const checks = ["dist/client/og-ensaya-ia.jpg", "dist/server/server.js"];
 
 let failed = false;
 for (const rel of checks) {

@@ -65,10 +65,10 @@ URL actual: https://ensaya-ia-production.up.railway.app
 2. En Railway → tu servicio → **Deployments**.
 3. Abre el deploy **Success** mas reciente y compara el commit hash / mensaje con `main`.
 4. Comprueba en vivo:
-   - HTML: View Source — `og:image` debe ser `https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg` (no `storage.googleapis.com/...` ni `twitter:site` `@Lovable`).
+   - HTML: View Source — `og:image` debe ser `https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg` (no una URL externa antigua de plantilla).
    - `curl -sI https://ensaya-ia-production.up.railway.app/og-ensaya-ia.jpg` → `200` y `Content-Type: image/jpeg`.
 
-Si el HTML sigue con marca Lovable o el OG da 404, Railway esta sirviendo un **deploy anterior** (suele pasar cuando los builds nuevos fallan y no reemplazan el que esta en vivo).
+Si el HTML sigue con meta OG antigua o el OG da 404, Railway esta sirviendo un **deploy anterior** (suele pasar cuando los builds nuevos fallan y no reemplazan el que esta en vivo).
 
 #### Forzar un redeploy
 
@@ -96,7 +96,7 @@ npx wrangler login
   "compatibility_date": "2026-09-07",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
 }
 ```
 
@@ -160,7 +160,7 @@ Registra el plugin en `vite.config.ts` segun [Hosting de TanStack Start](https:/
 ## Como se hace el dia D (orden corto)
 
 1. Commit de lo que quieras publicar (sin `.env`).
-2. `git push` al remoto (GitHub u origin de Cursor).
+2. `git push` al remoto (GitHub u origin).
 3. Conecta el repo al hosting elegido arriba.
 4. Pega `VITE_REQUIRE_AUTH=true` en el panel.
 5. Espera el build verde y abre la URL HTTPS.
@@ -177,7 +177,7 @@ Hoy las contrasenas estan en `localStorage` (demo escolar). Cuando haya un proye
 3. En Authentication → URL configuration, anade el dominio HTTPS como Redirect URL.
 4. El codigo de datos (`src/lib/rehearsal-data.ts`) ya intenta Supabase y, si falla, cae a lo local.
 
-No hace falta apagar el candado de login: `AuthGate` sigue pidiendo cuenta; solo cambia *donde* vive esa cuenta.
+No hace falta apagar el candado de login: `AuthGate` sigue pidiendo cuenta; solo cambia _donde_ vive esa cuenta.
 
 ## Si el microfono no funciona en la URL publica
 

@@ -2,7 +2,10 @@
 
 export async function extractPdfText(file: File) {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
   const data = new Uint8Array(await file.arrayBuffer());
   const document = await pdfjs.getDocument({ data }).promise;
   const pages: string[] = [];
@@ -17,7 +20,8 @@ export async function extractPdfText(file: File) {
     if (line) pages.push(line);
   }
   const rawText = pages.join("\n\n").trim();
-  if (!rawText) throw new Error("El PDF no tiene texto extraible. Prueba un .txt o un PDF no escaneado.");
+  if (!rawText)
+    throw new Error("El PDF no tiene texto extraible. Prueba un .txt o un PDF no escaneado.");
   return rawText;
 }
 

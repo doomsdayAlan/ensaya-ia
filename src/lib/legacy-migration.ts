@@ -21,10 +21,7 @@ export const LEGACY_STORAGE = {
 } as const;
 
 /** Correos de cuentas demo anteriores (migrar a DEMO_ACCOUNT.email). */
-export const LEGACY_DEMO_EMAILS = [
-  "demo@ensayaia.local",
-  "demo@cineestrella.local",
-] as const;
+export const LEGACY_DEMO_EMAILS = ["demo@ensayaia.local", "demo@cineestrella.local"] as const;
 
 /** Iteraciones PBKDF2 usadas en hashes antiguos (antes del valor OWASP actual). */
 export const LEGACY_PBKDF2_ITERATIONS = 12_000;

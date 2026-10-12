@@ -42,8 +42,14 @@ export function rememberPostLoginPath(path: string) {
 
 export function consumePostLoginPath() {
   if (typeof window === "undefined") return "/";
-  const path = sessionStorage.getItem(REDIRECT_KEY) || sessionStorage.getItem(LEGACY_STORAGE.postLogin) || "/";
+  const path =
+    sessionStorage.getItem(REDIRECT_KEY) || sessionStorage.getItem(LEGACY_STORAGE.postLogin) || "/";
   sessionStorage.removeItem(REDIRECT_KEY);
   sessionStorage.removeItem(LEGACY_STORAGE.postLogin);
   return path.startsWith("/") ? path : "/";
+}
+
+/** Vuelve a la ruta que AuthGate guardo (Inicio u otra pantalla). */
+export function goAfterLogin() {
+  window.location.assign(consumePostLoginPath());
 }

@@ -1,6 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Play, FileText, Settings, Drama, ArrowRight, Crown, MoreVertical, Users } from "lucide-react";
+import {
+  Play,
+  FileText,
+  Settings,
+  Drama,
+  ArrowRight,
+  Crown,
+  MoreVertical,
+  Users,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { formatRelativeDate } from "@/lib/rehearsal-data";

@@ -53,7 +53,9 @@ function openDb(): Promise<IDBDatabase> {
           store.createIndex("sceneId", "sceneId", { unique: false });
         }
         if (!store.indexNames.contains("takeKey")) {
-          store.createIndex("takeKey", ["grupoId", "scriptId", "lineId", "userId"], { unique: true });
+          store.createIndex("takeKey", ["grupoId", "scriptId", "lineId", "userId"], {
+            unique: true,
+          });
         }
       }
     };
@@ -104,7 +106,10 @@ export async function upsertGrupoGrabacion(
       await requestToPromise(store.put(row));
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "";
-      if (name === "QuotaExceededError" || (error instanceof Error && /quota/i.test(error.message))) {
+      if (
+        name === "QuotaExceededError" ||
+        (error instanceof Error && /quota/i.test(error.message))
+      ) {
         throw new Error(
           "No hay espacio suficiente en este navegador para guardar el audio. Borra grabaciones viejas o libera almacenamiento del sitio.",
         );

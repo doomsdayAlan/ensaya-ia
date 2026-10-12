@@ -4,10 +4,16 @@ export function canUseBrowserStorage() {
   return typeof window !== "undefined";
 }
 
-export function readJson<T>(storage: Storage, key: string, fallback: T, legacyKeys: string[] = []): T {
+export function readJson<T>(
+  storage: Storage,
+  key: string,
+  fallback: T,
+  legacyKeys: string[] = [],
+): T {
   if (!canUseBrowserStorage()) return fallback;
   try {
-    const raw = storage.getItem(key) ?? legacyKeys.map((item) => storage.getItem(item)).find(Boolean) ?? null;
+    const raw =
+      storage.getItem(key) ?? legacyKeys.map((item) => storage.getItem(item)).find(Boolean) ?? null;
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as T;
     if (!storage.getItem(key) && legacyKeys.some((item) => storage.getItem(item))) {
@@ -46,10 +52,10 @@ export function removeKey(storage: Storage, key: string) {
   storage.removeItem(key);
 }
 
-export function withTimeout<T>(promise: Promise<T>, ms = 800): Promise<T> {
+export function withTimeout<T>(promise: PromiseLike<T>, ms = 800): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("timeout")), ms);
-    promise.then(
+    Promise.resolve(promise).then(
       (value) => {
         clearTimeout(timer);
         resolve(value);

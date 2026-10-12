@@ -1,6 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
-import { getLocalAuthUser, isLocalUserId, loadLocalProfile, saveLocalProfile } from "@/lib/local-auth";
+import {
+  getLocalAuthUser,
+  isLocalUserId,
+  loadLocalProfile,
+  saveLocalProfile,
+} from "@/lib/local-auth";
 import {
   getLocalScriptDetails,
   getLocalScriptSetup,
@@ -15,7 +20,9 @@ import { withTimeout } from "@/lib/browser";
 import { cleanCharacterName, isCharacterCue } from "@/lib/script-text";
 
 function isSupabaseConfigured() {
-  const url = import.meta.env.VITE_SUPABASE_URL || (typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined);
+  const url =
+    import.meta.env.VITE_SUPABASE_URL ||
+    (typeof process !== "undefined" ? process.env.SUPABASE_URL : undefined);
   const key =
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     (typeof process !== "undefined" ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined);
@@ -167,7 +174,8 @@ export async function updatePerfilUsuario(patch: TablesUpdate<"perfil_usuario">)
     ...patch,
     user_id: user.id,
     email: user.email ?? current?.email ?? null,
-    display_name: patch.display_name ?? current?.display_name ?? user.user_metadata?.display_name ?? "Actor",
+    display_name:
+      patch.display_name ?? current?.display_name ?? user.user_metadata?.display_name ?? "Actor",
   });
 
   if (!isLocalUserId(user.id)) {
@@ -247,7 +255,7 @@ async function getRowsById<T extends { id: string }>(
   const { data, error } = await supabase.from(table).select("*").in("id", ids);
   if (error) throw error;
 
-  return new Map(((data as T[] | null) ?? []).map((item) => [item.id, item]));
+  return new Map(((data as unknown as T[] | null) ?? []).map((item) => [item.id, item]));
 }
 
 export async function getSceneLines(sceneId: string): Promise<ScriptLineWithCharacter[]> {
@@ -274,7 +282,10 @@ export async function getSceneLines(sceneId: string): Promise<ScriptLineWithChar
 
 export async function getScriptSetup(scriptId?: string, sceneId?: string): Promise<ScriptSetup> {
   const local = getLocalScriptSetup(scriptId, sceneId);
-  if (local && (!scriptId || local.script?.id === scriptId || scriptId === getDemoScriptSetup().script?.id)) {
+  if (
+    local &&
+    (!scriptId || local.script?.id === scriptId || scriptId === getDemoScriptSetup().script?.id)
+  ) {
     if (local.lines.length > 0) return local;
   }
 
@@ -286,10 +297,14 @@ export async function getScriptSetup(scriptId?: string, sceneId?: string): Promi
       scripts[0] ??
       null;
 
-    if (!script) return local ?? { script: null, scenes: [], scene: null, characters: [], lines: [] };
+    if (!script)
+      return local ?? { script: null, scenes: [], scene: null, characters: [], lines: [] };
 
     if (script.id.startsWith("local-") || script.id === getDemoScriptSetup().script?.id) {
-      return getLocalScriptSetup(script.id, sceneId) ?? local ?? { script, scenes: [], scene: null, characters: [], lines: [] };
+      return (
+        getLocalScriptSetup(script.id, sceneId) ??
+        local ?? { script, scenes: [], scene: null, characters: [], lines: [] }
+      );
     }
 
     const [scenes, characters] = await Promise.all([
@@ -343,7 +358,9 @@ export async function importScriptFromText(draft: ScriptImportDraft) {
 
   const parsedLines = parseImportedScriptLines(draft.rawText);
   if (parsedLines.length === 0) {
-    throw new Error("No se encontraron lineas de dialogo para importar. Verifica el formato del texto.");
+    throw new Error(
+      "No se encontraron lineas de dialogo para importar. Verifica el formato del texto.",
+    );
   }
 
   if (isLocalUserId(user.id)) {
@@ -375,7 +392,8 @@ export async function importScriptFromText(draft: ScriptImportDraft) {
       .select("*")
       .single();
 
-    if (scriptError) throw new Error(scriptError.message || scriptError.details || "No se pudo importar.");
+    if (scriptError)
+      throw new Error(scriptError.message || scriptError.details || "No se pudo importar.");
 
     try {
       const { data: scene, error: sceneError } = await supabase
@@ -451,7 +469,9 @@ export async function setActiveScript(script: ScriptRecord) {
   if (script.user_id !== user.id) throw new Error("Solo puedes activar tus libretos importados.");
 
   if (isLocalUserId(user.id) || script.id.startsWith("local-")) {
-    for (const item of listLocalScripts(true).filter((row) => row.user_id === user.id && row.is_active)) {
+    for (const item of listLocalScripts(true).filter(
+      (row) => row.user_id === user.id && row.is_active,
+    )) {
       patchLocalScript(item.id, user.id, { is_active: false });
     }
     return updateScript(script.id, { is_active: true });
@@ -497,7 +517,11 @@ export async function duplicateScript(scriptId: string) {
   if (!user) throw new Error("Inicia sesion para duplicar libretos.");
 
   const localSetup = getLocalScriptSetup(scriptId);
-  if (isLocalUserId(user.id) || scriptId.startsWith("local-") || localSetup?.script?.id === scriptId) {
+  if (
+    isLocalUserId(user.id) ||
+    scriptId.startsWith("local-") ||
+    localSetup?.script?.id === scriptId
+  ) {
     if (!localSetup?.script) throw new Error("No se encontro el libreto para duplicar.");
     return duplicateLocalSetup(localSetup, user.id);
   }

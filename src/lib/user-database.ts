@@ -72,7 +72,10 @@ async function copyLegacyDbIfNeeded() {
         });
         const profiles = oldDb.objectStoreNames.contains("perfil_usuario")
           ? await new Promise<unknown[]>((res, rej) => {
-              const req = oldDb.transaction("perfil_usuario", "readonly").objectStore("perfil_usuario").getAll();
+              const req = oldDb
+                .transaction("perfil_usuario", "readonly")
+                .objectStore("perfil_usuario")
+                .getAll();
               req.onsuccess = () => res(req.result ?? []);
               req.onerror = () => rej(req.error);
             })
@@ -133,7 +136,8 @@ function openDb(): Promise<IDBDatabase> {
         }
       };
       request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error ?? new Error("No se pudo abrir la base de datos."));
+      request.onerror = () =>
+        reject(request.error ?? new Error("No se pudo abrir la base de datos."));
     });
   });
 }
@@ -151,7 +155,9 @@ function bytesToHex(bytes: ArrayBuffer) {
 
 async function hashPassword(password: string, salt: string, iterations: number) {
   const encoded = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", encoded.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const key = await crypto.subtle.importKey("raw", encoded.encode(password), "PBKDF2", false, [
+    "deriveBits",
+  ]);
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", hash: "SHA-256", salt: encoded.encode(salt), iterations },
     key,
@@ -214,7 +220,9 @@ export async function updateUser(user: StoredUser) {
 export async function upsertProfile(profile: StoredProfile) {
   const db = await openDb();
   try {
-    await requestToPromise(db.transaction("perfil_usuario", "readwrite").objectStore("perfil_usuario").put(profile));
+    await requestToPromise(
+      db.transaction("perfil_usuario", "readwrite").objectStore("perfil_usuario").put(profile),
+    );
   } finally {
     db.close();
   }
@@ -240,7 +248,9 @@ export async function countUsers() {
   }
 }
 
-export function defaultStoredProfile(user: Pick<StoredUser, "id" | "email" | "displayName" | "createdAt">): StoredProfile {
+export function defaultStoredProfile(
+  user: Pick<StoredUser, "id" | "email" | "displayName" | "createdAt">,
+): StoredProfile {
   return {
     user_id: user.id,
     display_name: user.displayName,

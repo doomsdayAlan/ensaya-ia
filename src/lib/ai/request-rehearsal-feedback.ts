@@ -19,7 +19,8 @@ function parseFeedbackInput(data: unknown): RehearsalFeedbackInput {
     total: Math.max(1, Math.round(num(row.total, 1))),
     skipped: Math.max(0, Math.round(num(row.skipped))),
     difficulty: Math.min(100, Math.max(0, num(row.difficulty, 50))),
-    mode: typeof row.mode === "string" && row.mode.trim() ? row.mode.trim().slice(0, 40) : undefined,
+    mode:
+      typeof row.mode === "string" && row.mode.trim() ? row.mode.trim().slice(0, 40) : undefined,
   };
 }
 

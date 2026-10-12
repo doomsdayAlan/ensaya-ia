@@ -71,6 +71,7 @@ export type AnuncioConAutor = GrupoAnuncioRecord & {
     id_usuario: string;
     nombre_usuario: string | null;
     display_name: string | null;
+    email: string | null;
   } | null;
 };
 
@@ -106,14 +107,17 @@ function writeStore(store: Store) {
 }
 
 function generarCodigo(): string {
-  return Array.from({ length: 10 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => CHARS[b % CHARS.length]).join("");
 }
 
 function perfilDe(userId: string) {
   const local = loadLocalProfile(userId);
   const session = getLocalAuthUser();
   const email = local?.email ?? (session?.id === userId ? session.email : null);
-  const display = local?.display_name ?? (session?.id === userId ? session.user_metadata.display_name : null);
+  const display =
+    local?.display_name ?? (session?.id === userId ? session.user_metadata.display_name : null);
   return {
     id_usuario: userId,
     nombre_usuario: display,
@@ -122,7 +126,11 @@ function perfilDe(userId: string) {
   };
 }
 
-export async function crearGrupo(nombre: string, maxMiembros: number, codigoPersonalizado?: string) {
+export async function crearGrupo(
+  nombre: string,
+  maxMiembros: number,
+  codigoPersonalizado?: string,
+) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("Debes iniciar sesion para crear un grupo.");
   if (!canUseBrowserStorage()) throw new Error("No hay almacenamiento en este navegador.");
@@ -269,7 +277,9 @@ export async function salirDeGrupo(grupoId: string) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
   const store = readStore();
-  store.miembros = store.miembros.filter((item) => !(item.grupo_id === grupoId && item.user_id === userId));
+  store.miembros = store.miembros.filter(
+    (item) => !(item.grupo_id === grupoId && item.user_id === userId),
+  );
   writeStore(store);
 }
 
@@ -277,15 +287,23 @@ export async function eliminarMiembro(grupoId: string, miembroUserId: string) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
   const store = assertGrupoAdmin(grupoId, userId);
-  store.miembros = store.miembros.filter((item) => !(item.grupo_id === grupoId && item.user_id === miembroUserId));
+  store.miembros = store.miembros.filter(
+    (item) => !(item.grupo_id === grupoId && item.user_id === miembroUserId),
+  );
   writeStore(store);
 }
 
-export async function asignarPersonaje(grupoId: string, miembroUserId: string, personajeId: string | null) {
+export async function asignarPersonaje(
+  grupoId: string,
+  miembroUserId: string,
+  personajeId: string | null,
+) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
   const store = assertGrupoAdmin(grupoId, userId);
-  const miembro = store.miembros.find((item) => item.grupo_id === grupoId && item.user_id === miembroUserId);
+  const miembro = store.miembros.find(
+    (item) => item.grupo_id === grupoId && item.user_id === miembroUserId,
+  );
   if (!miembro) throw new Error("Miembro no encontrado.");
   miembro.personaje_id = personajeId;
   writeStore(store);
@@ -311,7 +329,9 @@ export async function reemplazarLibreto(grupoId: string, scriptId: string) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
   const store = assertGrupoAdmin(grupoId, userId);
-  const previous = store.libretos.filter((item) => item.grupo_id === grupoId).map((item) => item.script_id);
+  const previous = store.libretos
+    .filter((item) => item.grupo_id === grupoId)
+    .map((item) => item.script_id);
   store.libretos = store.libretos.filter((item) => item.grupo_id !== grupoId);
   store.miembros = store.miembros.map((item) =>
     item.grupo_id === grupoId ? { ...item, personaje_id: null } : item,
@@ -334,7 +354,9 @@ export async function removeLibretoDelGrupo(grupoId: string, scriptId: string) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("No autenticado.");
   const store = assertGrupoAdmin(grupoId, userId);
-  store.libretos = store.libretos.filter((item) => !(item.grupo_id === grupoId && item.script_id === scriptId));
+  store.libretos = store.libretos.filter(
+    (item) => !(item.grupo_id === grupoId && item.script_id === scriptId),
+  );
   writeStore(store);
   await deleteGrabacionesByScript(scriptId).catch(() => undefined);
 }
@@ -363,7 +385,9 @@ export async function eliminarAnuncio(anuncioId: string) {
   const store = readStore();
   const anuncio = store.anuncios.find((item) => item.id === anuncioId);
   if (!anuncio) return;
-  const me = store.miembros.find((item) => item.grupo_id === anuncio.grupo_id && item.user_id === userId);
+  const me = store.miembros.find(
+    (item) => item.grupo_id === anuncio.grupo_id && item.user_id === userId,
+  );
   if (!me || (me.rol !== "admin" && anuncio.user_id !== userId)) {
     throw new Error("No tienes permiso para eliminar este anuncio.");
   }
@@ -376,7 +400,11 @@ export function nombreMiembro(perfil: MiembroConPerfil["perfil"]): string {
 }
 
 export function formatGrupoDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("es", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export type GrupoAsignacion = { userId: string; displayName: string };
@@ -413,7 +441,9 @@ export async function getGrupoParaScript(
 
   if (!targetGrupoId) return null;
 
-  const me = store.miembros.find((item) => item.grupo_id === targetGrupoId && item.user_id === userId);
+  const me = store.miembros.find(
+    (item) => item.grupo_id === targetGrupoId && item.user_id === userId,
+  );
   if (!me) return null;
 
   const asignaciones: Record<string, GrupoAsignacion> = {};
@@ -443,7 +473,10 @@ export function isLibretoEnGrupo(grupoId: string, scriptId: string): boolean {
   return store.libretos.some((item) => item.grupo_id === grupoId && item.script_id === scriptId);
 }
 
-export async function getScriptDetailsForGrupo(scriptId: string, _grupoId: string): Promise<ScriptDetails> {
+export async function getScriptDetailsForGrupo(
+  scriptId: string,
+  _grupoId: string,
+): Promise<ScriptDetails> {
   return getScriptDetails(scriptId);
 }
 

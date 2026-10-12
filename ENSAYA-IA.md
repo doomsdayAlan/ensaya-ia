@@ -13,7 +13,7 @@ En Ensaya IA, “IA” no es el nombre comercial de un chatbot. Hay capas distin
 3. **Comparación de líneas.** Algoritmo de similitud (Levenshtein y normalización). No es un modelo de IA.
 4. **Notas al finalizar (opcional).** Si hay clave de API, un LLM (**Gemini** de Google, intercambiable por Groq u OpenAI) redacta retroalimentación de director. Si no hay clave, se usan notas locales. En `/finalizado` un **director virtual** (`DirectorAvatar`) muestra esas notas y puede leerlas con `speechSynthesis`. El componente admite `mode="welcome"` para extenderlo luego al inicio y otras pantallas.
 
-No se debe citar ChatGPT como motor del micrófono. ChatGPT es una aplicación de chat; Ensaya IA usa el reconocimiento de voz del navegador (Google en Chrome, Microsoft en Edge) y, si se configura, Gemini para las notas finales.
+No se debe citar un chatbot de texto como motor del micrófono. Ensaya IA usa el reconocimiento de voz del navegador (Google en Chrome, Microsoft en Edge) y, si se configura, Gemini para las notas finales.
 
 ## Cómo correrlo
 

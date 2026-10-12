@@ -13,7 +13,10 @@ export function isSceneHeaderLine(line: string) {
 
 /** Misma limpieza en importadores (local y remoto). */
 export function cleanCharacterName(value: string) {
-  return value.replace(/[:.\-–—]/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[:.\-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function isCharacterCue(line: string) {

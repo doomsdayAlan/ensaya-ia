@@ -19,7 +19,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number) {
   });
 }
 
-export async function runRehearsalFeedback(input: RehearsalFeedbackInput): Promise<RehearsalFeedbackResult> {
+export async function runRehearsalFeedback(
+  input: RehearsalFeedbackInput,
+): Promise<RehearsalFeedbackResult> {
   const fallback = await templateProvider.generateFeedback(input);
   try {
     const provider = getRehearsalAiProvider();

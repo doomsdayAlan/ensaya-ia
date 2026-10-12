@@ -1,4 +1,10 @@
-import { DEMO_JULIETA_ID, DEMO_ROMEO_ID, DEMO_SCENE_ID, DEMO_SCRIPT_ID, getDemoScriptSetup } from "@/lib/demo-script";
+import {
+  DEMO_JULIETA_ID,
+  DEMO_ROMEO_ID,
+  DEMO_SCENE_ID,
+  DEMO_SCRIPT_ID,
+  getDemoScriptSetup,
+} from "@/lib/demo-script";
 import { canUseBrowserStorage, readJson, removeKey, withTimeout, writeJson } from "@/lib/browser";
 import { getLocalAuthUser } from "@/lib/local-auth";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
@@ -72,7 +78,9 @@ export function saveActiveRehearsal(rehearsal: ActiveRehearsal) {
 }
 
 export function loadActiveRehearsal(): ActiveRehearsal | null {
-  return readJson<ActiveRehearsal | null>(sessionStorage, ACTIVE_KEY, null, [LEGACY_STORAGE.activeRehearsal]);
+  return readJson<ActiveRehearsal | null>(sessionStorage, ACTIVE_KEY, null, [
+    LEGACY_STORAGE.activeRehearsal,
+  ]);
 }
 
 export function clearActiveRehearsal() {
@@ -95,11 +103,18 @@ export function saveLocalReport(report: LocalRehearsalReport, context?: ReportCo
 }
 
 export function loadLocalReport(): LocalRehearsalReport | null {
-  return readJson<LocalRehearsalReport | null>(sessionStorage, REPORT_KEY, null, [LEGACY_STORAGE.lastReport]);
+  return readJson<LocalRehearsalReport | null>(sessionStorage, REPORT_KEY, null, [
+    LEGACY_STORAGE.lastReport,
+  ]);
 }
 
 function readHistory() {
-  return readJson<RehearsalSummary[]>(localStorage, HISTORY_KEY, [], [LEGACY_STORAGE.rehearsalHistory]);
+  return readJson<RehearsalSummary[]>(
+    localStorage,
+    HISTORY_KEY,
+    [],
+    [LEGACY_STORAGE.rehearsalHistory],
+  );
 }
 
 export function listLocalHistory(limit = 10): RehearsalSummary[] {
@@ -212,12 +227,19 @@ function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContex
     },
     selectedCharacter: context?.selectedCharacter ?? null,
   };
-  writeJson(localStorage, HISTORY_KEY, (() => {
-    const previous = readHistory();
-    const others = previous.filter((row) => row.user_id !== userId);
-    const mine = [summary, ...previous.filter((row) => row.user_id === userId)].slice(0, HISTORY_LIMIT);
-    return [...mine, ...others];
-  })());
+  writeJson(
+    localStorage,
+    HISTORY_KEY,
+    (() => {
+      const previous = readHistory();
+      const others = previous.filter((row) => row.user_id !== userId);
+      const mine = [summary, ...previous.filter((row) => row.user_id === userId)].slice(
+        0,
+        HISTORY_LIMIT,
+      );
+      return [...mine, ...others];
+    })(),
+  );
 }
 
 export async function loadRecentRehearsalsSafe(limit = 3) {
@@ -234,7 +256,10 @@ export async function loadScriptsSafe(): Promise<ScriptRecord[]> {
   return [getDemoScriptSetup().script!];
 }
 
-export async function loadScriptSetupSafe(scriptId?: string, sceneId?: string): Promise<ScriptSetup> {
+export async function loadScriptSetupSafe(
+  scriptId?: string,
+  sceneId?: string,
+): Promise<ScriptSetup> {
   try {
     const setup = await withTimeout(getScriptSetup(scriptId, sceneId));
     if (setup.script && setup.lines.length > 0) return setup;
@@ -278,9 +303,18 @@ export async function startLocalRehearsal(draft: {
 }
 
 export function defaultCharacterId(characters: CharacterRecord[]) {
-  return characters.find((character) => character.actor_type === "user")?.id ?? characters[0]?.id ?? DEMO_ROMEO_ID;
+  return (
+    characters.find((character) => character.actor_type === "user")?.id ??
+    characters[0]?.id ??
+    DEMO_ROMEO_ID
+  );
 }
 
 export function demoIds() {
-  return { scriptId: DEMO_SCRIPT_ID, sceneId: DEMO_SCENE_ID, characterId: DEMO_ROMEO_ID, aiId: DEMO_JULIETA_ID };
+  return {
+    scriptId: DEMO_SCRIPT_ID,
+    sceneId: DEMO_SCENE_ID,
+    characterId: DEMO_ROMEO_ID,
+    aiId: DEMO_JULIETA_ID,
+  };
 }

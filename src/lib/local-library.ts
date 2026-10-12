@@ -1,4 +1,10 @@
-import type { CharacterRecord, ScriptDetails, ScriptImportDraft, ScriptRecord, ScriptSetup } from "@/lib/rehearsal-data";
+import type {
+  CharacterRecord,
+  ScriptDetails,
+  ScriptImportDraft,
+  ScriptRecord,
+  ScriptSetup,
+} from "@/lib/rehearsal-data";
 import { cleanCharacterName, isCharacterCue, isSceneHeaderLine } from "@/lib/script-text";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
@@ -18,7 +24,9 @@ function emptyLibrary(): LocalLibrary {
 }
 
 function readLibrary(): LocalLibrary {
-  return readJson<LocalLibrary>(localStorage, LIBRARY_KEY, emptyLibrary(), [LEGACY_STORAGE.library]);
+  return readJson<LocalLibrary>(localStorage, LIBRARY_KEY, emptyLibrary(), [
+    LEGACY_STORAGE.library,
+  ]);
 }
 
 function writeLibrary(library: LocalLibrary) {
@@ -110,13 +118,17 @@ function parseSceneBody(body: string): ParsedImportLine[] {
   return parsed;
 }
 
-export function saveImportedLocalScript(draft: ScriptImportDraft, userId: string, parsedLines: ParsedImportLine[]) {
+export function saveImportedLocalScript(
+  draft: ScriptImportDraft,
+  userId: string,
+  parsedLines: ParsedImportLine[],
+) {
   const now = new Date().toISOString();
   const scriptId = `local-script-${crypto.randomUUID()}`;
 
   const sceneChunks = splitRawTextIntoScenes(draft.rawText);
   const sceneLineGroups =
-    sceneChunks.length === 1 && !SCENE_HEADER_RE.test(sceneChunks[0]?.title ?? "")
+    sceneChunks.length === 1 && !isSceneHeaderLine(sceneChunks[0]?.title ?? "")
       ? [{ title: "Escena importada", lines: parsedLines }]
       : sceneChunks.map((chunk) => ({
           title: chunk.title,
@@ -146,7 +158,10 @@ export function saveImportedLocalScript(draft: ScriptImportDraft, userId: string
     title: draft.title.trim(),
     author: draft.author?.trim() || null,
     genre: draft.genre?.trim() || "Importado",
-    act_count: Math.max(1, sceneLineGroups.filter((g) => /^(ACTO|Acto)\b/i.test(g.title)).length || 1),
+    act_count: Math.max(
+      1,
+      sceneLineGroups.filter((g) => /^(ACTO|Acto)\b/i.test(g.title)).length || 1,
+    ),
     description: draft.description?.trim() || "Libreto importado en este navegador.",
     is_favorite: false,
     is_active: false,
@@ -175,7 +190,9 @@ export function saveImportedLocalScript(draft: ScriptImportDraft, userId: string
   const lines = sceneLineGroups.flatMap((group, sceneIndex) => {
     const scene = scenes[sceneIndex]!;
     return group.lines.map((line, index) => {
-      const character = line.characterName ? byName.get(line.characterName.toUpperCase()) ?? null : null;
+      const character = line.characterName
+        ? (byName.get(line.characterName.toUpperCase()) ?? null)
+        : null;
       return {
         id: `local-line-${crypto.randomUUID()}`,
         scene_id: scene.id,
@@ -183,7 +200,10 @@ export function saveImportedLocalScript(draft: ScriptImportDraft, userId: string
         line_order: index + 1,
         text: line.text,
         cue: null,
-        duration_seconds: Math.max(3, Math.min(12, Math.round(line.text.split(/\s+/).length / 2.4))),
+        duration_seconds: Math.max(
+          3,
+          Math.min(12, Math.round(line.text.split(/\s+/).length / 2.4)),
+        ),
         created_at: now,
         character,
       };
@@ -223,7 +243,8 @@ export function duplicateLocalSetup(setup: ScriptSetup, userId: string) {
   });
 
   const lines = setup.lines.map((line) => {
-    const sceneId = sceneIdMap.get(line.scene_id) ?? scenes[0]?.id ?? `local-scene-${crypto.randomUUID()}`;
+    const sceneId =
+      sceneIdMap.get(line.scene_id) ?? scenes[0]?.id ?? `local-scene-${crypto.randomUUID()}`;
     const characterId = line.character_id ? (charIdMap.get(line.character_id) ?? null) : null;
     const character = characters.find((item) => item.id === characterId) ?? null;
     return {
@@ -266,7 +287,9 @@ export function duplicateLocalSetup(setup: ScriptSetup, userId: string) {
 
 export function patchLocalScript(scriptId: string, userId: string, patch: Partial<ScriptRecord>) {
   const library = readLibrary();
-  const index = library.scripts.findIndex((item) => item.id === scriptId && item.user_id === userId);
+  const index = library.scripts.findIndex(
+    (item) => item.id === scriptId && item.user_id === userId,
+  );
   if (index < 0) throw new Error("No se encontro el libreto local.");
   const updated = { ...library.scripts[index], ...patch, updated_at: new Date().toISOString() };
   library.scripts[index] = updated;
@@ -282,7 +305,9 @@ export function patchLocalScript(scriptId: string, userId: string, patch: Partia
 
 export function removeLocalScript(scriptId: string, userId: string) {
   const library = readLibrary();
-  library.scripts = library.scripts.filter((item) => !(item.id === scriptId && item.user_id === userId));
+  library.scripts = library.scripts.filter(
+    (item) => !(item.id === scriptId && item.user_id === userId),
+  );
   delete library.setups[scriptId];
   writeLibrary(library);
 }

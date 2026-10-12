@@ -20,7 +20,9 @@ export function AuthShell({
           <AppLogo size={120} />
         </Link>
         <div className="relative z-10 max-w-md">
-          <p className="text-[11px] tracking-[0.3em] uppercase text-primary mb-3">Ensaya · Crea · Interpreta</p>
+          <p className="text-[11px] tracking-[0.3em] uppercase text-primary mb-3">
+            Ensaya · Crea · Interpreta
+          </p>
           <h2 className="font-display text-4xl leading-tight mb-4">
             Tu escenario, <span className="italic text-gradient-primary">cuando quieras.</span>
           </h2>
@@ -67,9 +69,15 @@ export function Field({
 }) {
   return (
     <label className="block mb-4">
-      <span className="text-xs text-muted-foreground tracking-wider uppercase mb-1.5 block">{label}</span>
+      <span className="text-xs text-muted-foreground tracking-wider uppercase mb-1.5 block">
+        {label}
+      </span>
       <div className="relative">
-        {icon && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>}
+        {icon && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {icon}
+          </span>
+        )}
         <input
           type={type}
           placeholder={placeholder}

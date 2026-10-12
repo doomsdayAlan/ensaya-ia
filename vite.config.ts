@@ -21,37 +21,37 @@ export default defineConfig(({ mode }) => {
   if (env.AI_TIMEOUT_MS) process.env.AI_TIMEOUT_MS ??= env.AI_TIMEOUT_MS;
 
   return {
-  server: {
-    host: true,
-    port: 8080,
-  },
-  resolve: {
-    alias: {
-      "@": `${process.cwd()}/src`,
+    server: {
+      host: true,
+      port: 8080,
     },
-    dedupe: [
-      "react",
-      "react-dom",
-      "react/jsx-runtime",
-      "react/jsx-dev-runtime",
-      "@tanstack/react-query",
-      "@tanstack/query-core",
-    ],
-  },
-  plugins: [
-    tailwindcss(),
-    tsConfigPaths({ projects: ["./tsconfig.json"] }),
-    tanstackStart({
-      server: { entry: "server" },
-      importProtection: {
-        behavior: "error",
-        client: {
-          files: ["**/server/**"],
-          specifiers: ["server-only"],
-        },
+    resolve: {
+      alias: {
+        "@": `${process.cwd()}/src`,
       },
-    }),
-    viteReact(),
-  ],
+      dedupe: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@tanstack/react-query",
+        "@tanstack/query-core",
+      ],
+    },
+    plugins: [
+      tailwindcss(),
+      tsConfigPaths({ projects: ["./tsconfig.json"] }),
+      tanstackStart({
+        server: { entry: "server" },
+        importProtection: {
+          behavior: "error",
+          client: {
+            files: ["**/server/**"],
+            specifiers: ["server-only"],
+          },
+        },
+      }),
+      viteReact(),
+    ],
   };
 });

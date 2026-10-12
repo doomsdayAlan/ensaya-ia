@@ -160,7 +160,11 @@ export function effectiveMatchDifficulty(aiDifficulty: number, allowImprov: bool
   return Math.max(0, aiDifficulty - IMPROV_DIFFICULTY_OFFSET);
 }
 
-export function evaluateSpokenLine(spoken: string, expected: string, difficulty: number): LineVerdict {
+export function evaluateSpokenLine(
+  spoken: string,
+  expected: string,
+  difficulty: number,
+): LineVerdict {
   const score = lineSimilarity(spoken, expected);
   const needed = matchThreshold(difficulty);
   return {
@@ -180,7 +184,9 @@ export function scoreRehearsal(input: ScoreRehearsalInput): RehearsalScore {
 
   // memorization: promedio de scores Levenshtein/similitud SOLO de lineas del usuario
   const memorization = userLineScores.length
-    ? Math.round((userLineScores.reduce((sum, value) => sum + value, 0) / userLineScores.length) * 100)
+    ? Math.round(
+        (userLineScores.reduce((sum, value) => sum + value, 0) / userLineScores.length) * 100,
+      )
     : 0;
 
   // clarity: proxy de calidad de coincidencia (Levenshtein / lineSimilarity), no claridad acustica
@@ -192,13 +198,19 @@ export function scoreRehearsal(input: ScoreRehearsalInput): RehearsalScore {
   // expression: proxy por repeticiones vs completado (no expresividad vocal real)
   const completionRatio = userLinesTotal > 0 ? userLinesCompleted / userLinesTotal : 0;
   const repeatRatio =
-    userLinesCompleted > 0 ? Math.min(1, repeated / Math.max(1, userLinesCompleted)) : repeated > 0 ? 1 : 0;
+    userLinesCompleted > 0
+      ? Math.min(1, repeated / Math.max(1, userLinesCompleted))
+      : repeated > 0
+        ? 1
+        : 0;
   const expression = Math.round(
     Math.max(0, Math.min(100, completionRatio * 65 + (1 - repeatRatio) * 35)),
   );
 
   // projection: tasa de completado de lineas de usuario mezclada con memorizacion
-  const projection = Math.round(Math.max(0, Math.min(100, completionRatio * 50 + memorization * 0.5)));
+  const projection = Math.round(
+    Math.max(0, Math.min(100, completionRatio * 50 + memorization * 0.5)),
+  );
 
   const score = Math.round((memorization + clarity + expression + rhythm + projection) / 5);
   return { memorization, clarity, expression, rhythm, projection, score };
@@ -211,7 +223,8 @@ export function buildFeedback(params: {
   skipped: number;
 }) {
   const { memorization, completed, total, skipped } = params;
-  if (completed === 0) return "Termina un ensayo hablando tus lineas para generar retroalimentacion.";
+  if (completed === 0)
+    return "Termina un ensayo hablando tus lineas para generar retroalimentacion.";
   if (memorization >= 80) {
     return "Muy buena memorizacion. La IA te siguio el ritmo y las coincidencias con el libreto fueron altas.";
   }

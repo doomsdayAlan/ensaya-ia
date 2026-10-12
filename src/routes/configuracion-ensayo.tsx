@@ -47,9 +47,15 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
-function readSearchParam(search: unknown, searchStr: string | undefined, key: string): string | undefined {
+function readSearchParam(
+  search: unknown,
+  searchStr: string | undefined,
+  key: string,
+): string | undefined {
   if (typeof search === "string") {
-    return new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined;
+    return (
+      new URLSearchParams(search.startsWith("?") ? search : `?${search}`).get(key) ?? undefined
+    );
   }
   if (search && typeof search === "object" && key in search) {
     const value = (search as Record<string, unknown>)[key];
@@ -301,7 +307,7 @@ function ConfigEnsayo() {
   });
 
   const selectedMode = MODES.find((item) => item.value === mode) ?? MODES[0];
-  
+
   const selectedCharacter =
     setup?.characters?.find((character) => character?.id === selectedCharacterId) ??
     setup?.characters?.[0] ??
@@ -314,7 +320,8 @@ function ConfigEnsayo() {
         <div>
           <h1 className="font-display text-4xl">Configuracion de ensayo</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Elige libreto, personaje y arranca el ensayo. La IA habla las otras lineas en el navegador.
+            Elige libreto, personaje y arranca el ensayo. La IA habla las otras lineas en el
+            navegador.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -523,19 +530,22 @@ function ConfigEnsayo() {
             PERSONAJES ({setup?.characters?.length ?? 0})
           </p>
           <div className="space-y-2 mb-4">
-            {(setup?.characters || []).filter(Boolean).slice(0, 4).map((character) => (
-              <div key={character.id} className="flex items-center gap-2 text-sm">
-                <div className="w-7 h-7 rounded-full bg-primary/15 text-primary text-xs grid place-items-center">
-                  {character.name?.[0] || "?"}
+            {(setup?.characters || [])
+              .filter(Boolean)
+              .slice(0, 4)
+              .map((character) => (
+                <div key={character.id} className="flex items-center gap-2 text-sm">
+                  <div className="w-7 h-7 rounded-full bg-primary/15 text-primary text-xs grid place-items-center">
+                    {character.name?.[0] || "?"}
+                  </div>
+                  <span className="flex-1">{character.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${character.id === selectedCharacter?.id ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
+                  >
+                    {character.id === selectedCharacter?.id ? "Tu" : "IA"}
+                  </span>
                 </div>
-                <span className="flex-1">{character.name}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${character.id === selectedCharacter?.id ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
-                >
-                  {character.id === selectedCharacter?.id ? "Tu" : "IA"}
-                </span>
-              </div>
-            ))}
+              ))}
           </div>
           <button className="w-full text-xs text-primary border border-primary/30 rounded-md py-1.5 mb-5">
             {setup?.lines?.length ?? 0} lineas cargadas

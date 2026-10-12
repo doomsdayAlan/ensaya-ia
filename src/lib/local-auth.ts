@@ -55,6 +55,7 @@ export type LocalAuthUser = {
     display_name: string;
     full_name: string;
     name: string;
+    avatar_url?: string | null;
   };
 };
 
@@ -87,7 +88,9 @@ function persistSession(session: SessionRecord) {
 }
 
 export function getLocalAuthUser(): LocalAuthUser | null {
-  const session = readJson<SessionRecord | null>(localStorage, SESSION_KEY, null, [LEGACY_STORAGE.session]);
+  const session = readJson<SessionRecord | null>(localStorage, SESSION_KEY, null, [
+    LEGACY_STORAGE.session,
+  ]);
   if (!session?.userId || !session.email) return null;
   return toAuthUser(session);
 }
@@ -146,7 +149,8 @@ async function migrateLegacyUsers() {
   if (!canUseBrowserStorage()) return;
 
   const alreadyMigrated =
-    localStorage.getItem(MIGRATED_KEY) === "1" || localStorage.getItem(LEGACY_STORAGE.idbMigrated) === "1";
+    localStorage.getItem(MIGRATED_KEY) === "1" ||
+    localStorage.getItem(LEGACY_STORAGE.idbMigrated) === "1";
 
   if (!alreadyMigrated) {
     // Lectura puntual sin re-copiar el blob legado a ensaya-ia-users.
@@ -331,7 +335,9 @@ export function subscribeLocalAuth(listener: () => void) {
 }
 
 function readProfiles() {
-  return readJson<Record<string, PerfilUsuarioRecord>>(localStorage, PROFILE_KEY, {}, [LEGACY_STORAGE.profiles]);
+  return readJson<Record<string, PerfilUsuarioRecord>>(localStorage, PROFILE_KEY, {}, [
+    LEGACY_STORAGE.profiles,
+  ]);
 }
 
 export function loadLocalProfile(userId: string): PerfilUsuarioRecord | null {

@@ -68,11 +68,13 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
   const tieneLibreto = libretos.length > 0;
 
   const [showSelector, setShowSelector] = useState(false);
-  const [scriptAConfirmar, setScriptAConfirmar] = useState<{ id: string; title: string } | null>(null);
+  const [scriptAConfirmar, setScriptAConfirmar] = useState<{ id: string; title: string } | null>(
+    null,
+  );
 
   const { data: misScripts = [] } = useQuery({
     queryKey: ["scripts"],
-    queryFn: getScripts,
+    queryFn: () => getScripts(),
     enabled: isAdmin && showSelector,
   });
 
@@ -94,7 +96,10 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
       setShowSelector(false);
       setScriptAConfirmar(null);
     },
-    onError: (err: Error) => { toast.error(err.message); setScriptAConfirmar(null); },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setScriptAConfirmar(null);
+    },
   });
 
   const { mutate: removeLibreto } = useMutation({
@@ -126,7 +131,8 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
           <div className="bg-card border border-border/60 rounded-2xl w-full max-w-sm p-6 shadow-elevated">
             <h3 className="font-medium text-foreground mb-2">¿Reemplazar el libreto actual?</h3>
             <p className="text-sm text-muted-foreground mb-1">
-              Se asignará <span className="text-foreground font-medium">{scriptAConfirmar.title}</span>.
+              Se asignará{" "}
+              <span className="text-foreground font-medium">{scriptAConfirmar.title}</span>.
             </p>
             <p className="text-sm text-destructive/80 mb-6">
               Se perderán las asignaciones de personajes actuales.
@@ -169,7 +175,9 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
               Solo puede haber un libreto por grupo. Seleccionar uno nuevo reemplazará el actual.
             </p>
           )}
-          <p className="text-xs text-muted-foreground mb-3">Selecciona un libreto de tu biblioteca:</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Selecciona un libreto de tu biblioteca:
+          </p>
           {scriptsDisponibles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay otros libretos disponibles.</p>
           ) : (
@@ -247,14 +255,18 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
                     <div key={char.id} className="flex items-center justify-between py-2.5 gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <Crown className="w-3.5 h-3.5 text-primary/60 shrink-0" />
-                        <span className="text-sm font-medium text-foreground truncate">{char.name}</span>
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {char.name}
+                        </span>
                       </div>
                       {miembroAsignado ? (
                         <span className="text-xs text-primary bg-primary/10 border border-primary/20 rounded px-2 py-0.5 shrink-0">
                           {nombreMiembro(miembroAsignado.perfil)}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground/60 shrink-0">Sin asignar</span>
+                        <span className="text-xs text-muted-foreground/60 shrink-0">
+                          Sin asignar
+                        </span>
                       )}
                     </div>
                   );
@@ -451,9 +463,7 @@ function TabAnuncios({ detalle }: { detalle: GrupoDetalle }) {
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span className="text-xs font-medium text-primary">
-                  {nombreMiembro(a.perfil)}
-                </span>
+                <span className="text-xs font-medium text-primary">{nombreMiembro(a.perfil)}</span>
                 <span className="text-xs text-muted-foreground/60">
                   {formatGrupoDate(a.created_at)}
                 </span>
@@ -529,8 +539,8 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
         <Mic className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
         <p className="text-sm text-muted-foreground mb-1">Aun no hay grabaciones en este grupo.</p>
         <p className="text-xs text-muted-foreground">
-          En Configurar ensayo elige modo <span className="text-foreground">En grupo</span>, interpreta tu
-          personaje y las tomas se guardan por linea y por miembro.
+          En Configurar ensayo elige modo <span className="text-foreground">En grupo</span>,
+          interpreta tu personaje y las tomas se guardan por linea y por miembro.
         </p>
       </div>
     );
@@ -540,7 +550,8 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <p className="text-xs text-muted-foreground">
-          {visibles.length} grabacion{visibles.length === 1 ? "" : "es"} · una toma por miembro y linea.
+          {visibles.length} grabacion{visibles.length === 1 ? "" : "es"} · una toma por miembro y
+          linea.
         </p>
         {escenas.length > 0 && (
           <select
@@ -558,7 +569,10 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
         )}
       </div>
       {visibles.map((item) => (
-        <div key={item.id} className="bg-card border border-border/60 rounded-xl p-4 flex items-center gap-3">
+        <div
+          key={item.id}
+          className="bg-card border border-border/60 rounded-xl p-4 flex items-center gap-3"
+        >
           <button
             type="button"
             onClick={() => reproducir(item)}
@@ -601,7 +615,11 @@ function GrupoDetallePage() {
   const { grupoId } = Route.useParams();
   const [tab, setTab] = useState<Tab>("MATERIALES");
 
-  const { data: detalle, isLoading, isError } = useQuery({
+  const {
+    data: detalle,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["grupo-detalle", grupoId],
     queryFn: () => getGrupoDetalle(grupoId),
   });

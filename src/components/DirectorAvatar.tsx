@@ -1,7 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Mic, Square, Volume2 } from "lucide-react";
-import { canUseSpeechSynthesis, resolveRehearsalVoice, speakLine, stopSpeaking } from "@/lib/rehearsal-ai";
+import {
+  canUseSpeechSynthesis,
+  resolveRehearsalVoice,
+  speakLine,
+  stopSpeaking,
+} from "@/lib/rehearsal-ai";
 import { getPerfilUsuario } from "@/lib/rehearsal-data";
 
 /** Modos listos para escalar: hoy feedback; welcome = saludo en inicio/login. */
@@ -124,7 +129,9 @@ export function DirectorAvatar({
       <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
         <div className="shrink-0 text-center">
           <DirectorBlob mood={mood} />
-          <p className="mt-2 text-[10px] tracking-[0.22em] uppercase text-muted-foreground">Ensayín</p>
+          <p className="mt-2 text-[10px] tracking-[0.22em] uppercase text-muted-foreground">
+            Ensayín
+          </p>
           <p className="text-xs text-primary/90 mt-0.5">{moodHint}</p>
         </div>
 
@@ -144,7 +151,11 @@ export function DirectorAvatar({
               disabled={!text.trim()}
               className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-surface/90 px-3.5 py-1.5 text-xs font-medium hover:border-primary/70 hover:bg-primary/10 transition disabled:opacity-50"
             >
-              {speaking ? <Square className="w-3.5 h-3.5 fill-current" /> : <Volume2 className="w-3.5 h-3.5" />}
+              {speaking ? (
+                <Square className="w-3.5 h-3.5 fill-current" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5" />
+              )}
               {buttonLabel}
             </button>
           </div>
@@ -154,7 +165,9 @@ export function DirectorAvatar({
               className="absolute -left-2 top-8 hidden sm:block w-3.5 h-3.5 rotate-45 bg-surface/90 border-l border-b border-border/40"
               aria-hidden
             />
-            <p className="text-foreground/95 whitespace-pre-wrap">{text || "Sin notas para este ensayo."}</p>
+            <p className="text-foreground/95 whitespace-pre-wrap">
+              {text || "Sin notas para este ensayo."}
+            </p>
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
@@ -246,12 +259,16 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
     }
     raf = requestAnimationFrame(tick);
 
+    const pupilL = pupilLRef.current;
+    const pupilR = pupilRRef.current;
+    const bodyEl = bodyRef.current;
+
     return () => {
       cancelAnimationFrame(raf);
       if (finePointer) window.removeEventListener("mousemove", onMove);
-      pupilLRef.current?.setAttribute("transform", "translate(0, 0)");
-      pupilRRef.current?.setAttribute("transform", "translate(0, 0)");
-      bodyRef.current?.style.setProperty("--blob-tilt", "0deg");
+      pupilL?.setAttribute("transform", "translate(0, 0)");
+      pupilR?.setAttribute("transform", "translate(0, 0)");
+      bodyEl?.style.setProperty("--blob-tilt", "0deg");
     };
   }, [reducedMotion]);
 
@@ -323,7 +340,10 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
       </div>
 
       {showSparkles && (
-        <div className="director-blob__sparkles absolute inset-0 pointer-events-none z-[2]" aria-hidden>
+        <div
+          className="director-blob__sparkles absolute inset-0 pointer-events-none z-[2]"
+          aria-hidden
+        >
           <span className="director-blob__spark director-blob__spark--1" />
           <span className="director-blob__spark director-blob__spark--2" />
           <span className="director-blob__spark director-blob__spark--3" />

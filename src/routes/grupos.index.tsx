@@ -22,7 +22,9 @@ export const Route = createFileRoute("/grupos/")({
 
 function generarCodigoLocal() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 
 function copiaCodigo(codigo: string) {
@@ -39,8 +41,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
   const [usarCodigoPropio, setUsarCodigoPropio] = useState(false);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () =>
-      crearGrupo(nombre, maxMiembros, usarCodigoPropio ? codigoCustom : undefined),
+    mutationFn: () => crearGrupo(nombre, maxMiembros, usarCodigoPropio ? codigoCustom : undefined),
     onSuccess: (grupo) => {
       queryClient.invalidateQueries({ queryKey: ["mis-grupos"] });
       toast.success(`Grupo "${grupo.nombre}" creado. Código: ${grupo.codigo_invitacion}`);
@@ -50,8 +51,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
   });
 
   const puedeGuardar =
-    nombre.trim().length >= 2 &&
-    (!usarCodigoPropio || codigoCustom.trim().length === 10);
+    nombre.trim().length >= 2 && (!usarCodigoPropio || codigoCustom.trim().length === 10);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -266,14 +266,20 @@ function GrupoCard({ grupo }: { grupo: GrupoConRol }) {
               <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
               <div className="absolute right-0 top-8 z-20 w-44 bg-card border border-border/60 rounded-xl shadow-elevated py-1 text-sm">
                 <button
-                  onClick={() => { copiaCodigo(grupo.codigo_invitacion); setMenuAbierto(false); }}
+                  onClick={() => {
+                    copiaCodigo(grupo.codigo_invitacion);
+                    setMenuAbierto(false);
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground hover:bg-surface/60 transition"
                 >
                   <Copy className="w-4 h-4" /> Copiar código
                 </button>
                 {isAdmin ? (
                   <button
-                    onClick={() => { if (!eliminando) eliminar(); setMenuAbierto(false); }}
+                    onClick={() => {
+                      if (!eliminando) eliminar();
+                      setMenuAbierto(false);
+                    }}
                     disabled={eliminando}
                     className="flex w-full items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10 transition disabled:opacity-50"
                   >
@@ -281,7 +287,10 @@ function GrupoCard({ grupo }: { grupo: GrupoConRol }) {
                   </button>
                 ) : (
                   <button
-                    onClick={() => { if (!saliendo) salir(); setMenuAbierto(false); }}
+                    onClick={() => {
+                      if (!saliendo) salir();
+                      setMenuAbierto(false);
+                    }}
                     disabled={saliendo}
                     className="flex w-full items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10 transition disabled:opacity-50"
                   >
@@ -303,7 +312,11 @@ function GruposList() {
   const [showCrear, setShowCrear] = useState(false);
   const [showUnirse, setShowUnirse] = useState(false);
 
-  const { data: grupos = [], isLoading, isError } = useQuery({
+  const {
+    data: grupos = [],
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["mis-grupos"],
     queryFn: getMisGrupos,
   });
@@ -350,7 +363,9 @@ function GruposList() {
       {!isLoading && !isError && grupos.length === 0 && (
         <div className="bg-card border border-border/60 rounded-xl p-10 text-center">
           <Users className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-sm font-medium text-foreground mb-1">Aún no perteneces a ningún grupo</p>
+          <p className="text-sm font-medium text-foreground mb-1">
+            Aún no perteneces a ningún grupo
+          </p>
           <p className="text-xs text-muted-foreground">
             Crea uno nuevo o únete con un código de invitación.
           </p>

@@ -1,12 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { consumePostLoginPath } from "@/lib/app-config";
+import { goAfterLogin } from "@/lib/app-config";
 import { enterDemoAccount } from "@/lib/local-auth";
-
-/** Vuelve a la ruta que AuthGate guardo (Inicio u otra pantalla). */
-export function goAfterLogin() {
-  window.location.assign(consumePostLoginPath());
-}
 
 export function DemoAccountButton() {
   const queryClient = useQueryClient();
