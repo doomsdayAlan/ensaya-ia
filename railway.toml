@@ -1,14 +1,13 @@
-# Deploy Ensaya IA en Railway.
-# Preferencia: Dockerfile en la raiz (Node 22.12 + verify dist). Si el panel fuerza
-# Railpack, usa el buildCommand de abajo. Overrides del dashboard pisan este archivo.
+# Una sola via de build: Dockerfile (no Nixpacks / Railpack).
+# Si el panel del servicio define otro builder o Build/Start Command, ese override gana:
+# borra los overrides del dashboard para respetar este archivo.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-# Fallback si el servicio usa Railpack en vez del Dockerfile:
-# buildCommand = "npm ci --include=dev && npm run build && node scripts/verify-railway-dist.mjs"
 
 [deploy]
+# Debe coincidir con CMD del Dockerfile: sirve dist/ generado en el build.
 startCommand = "node railway-server.mjs"
 healthcheckPath = "/og-ensaya-ia.jpg"
 healthcheckTimeout = 120
