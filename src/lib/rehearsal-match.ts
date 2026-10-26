@@ -224,15 +224,15 @@ export function buildFeedback(params: {
 }) {
   const { memorization, completed, total, skipped } = params;
   if (completed === 0)
-    return "Termina un ensayo hablando tus lineas para generar retroalimentacion.";
+    return "Termina un ensayo hablando tus líneas para generar retroalimentación.";
   if (memorization >= 80) {
-    return "Muy buena memorizacion. La IA te siguio el ritmo y las coincidencias con el libreto fueron altas.";
+    return "Muy buena memorización. Las coincidencias con el libreto fueron altas.";
   }
   if (memorization >= 60) {
-    return "Buen avance. Recuerda las palabras clave de cada linea; puedes repetir la escena para fijar el texto.";
+    return "Buen avance. Recuerda las palabras clave de cada línea; puedes repetir la escena para fijar el texto.";
   }
   if (skipped > 0) {
-    return `Completaste ${completed} de ${total} lineas. Hubo omisiones: vuelve a ensayar sin saltar para mejorar la continuidad.`;
+    return `Completaste ${completed} de ${total} líneas. Hubo omisiones: vuelve a ensayar sin saltar para mejorar la continuidad.`;
   }
-  return "Sigue practicando en voz alta. No hace falta recitar perfecto: la IA avanza cuando reconoce parte de tu linea.";
+  return "Sigue practicando en voz alta. No hace falta recitar perfecto: el ensayo avanza cuando reconoce parte de tu línea.";
 }

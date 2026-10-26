@@ -44,7 +44,7 @@ function Ensayos() {
         )}
         {!isLoading && !isError && rehearsals.length === 0 && (
           <div className="bg-card border border-border/60 rounded-xl p-4 text-sm text-muted-foreground">
-            Aun no hay ensayos guardados.
+            Aún no hay ensayos guardados.
           </div>
         )}
         {rehearsals.map((rehearsal) => {

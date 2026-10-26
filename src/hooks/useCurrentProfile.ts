@@ -14,6 +14,7 @@ export function useCurrentProfile() {
     user,
     loading,
     signOut,
+    profile: data?.profile,
     displayName: data?.profile.display_name || user?.user_metadata?.display_name || user?.email,
   };
 }

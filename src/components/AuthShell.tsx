@@ -27,7 +27,8 @@ export function AuthShell({
             Tu escenario, <span className="italic text-gradient-primary">cuando quieras.</span>
           </h2>
           <p className="text-muted-foreground text-sm">
-            Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.
+            Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de tu
+            navegador.
           </p>
         </div>
         <p className="relative z-10 text-xs text-muted-foreground">© 2026 Ensaya IA</p>

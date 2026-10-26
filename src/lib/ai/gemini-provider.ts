@@ -35,10 +35,10 @@ export function createGeminiProvider(): RehearsalAiProvider | null {
         }),
       });
       if (!response.ok) {
-        throw new Error(`Gemini respondio ${response.status}`);
+        throw new Error(`El modelo de lenguaje respondió ${response.status}`);
       }
       const text = extractText(await response.json());
-      if (!text) throw new Error("Gemini no devolvio texto.");
+      if (!text) throw new Error("El modelo de lenguaje no devolvió texto.");
       return text;
     },
   };

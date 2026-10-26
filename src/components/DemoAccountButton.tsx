@@ -14,7 +14,7 @@ export function DemoAccountButton() {
           await enterDemoAccount();
           queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
           queryClient.invalidateQueries({ queryKey: ["scripts"] });
-          toast.success("Sesion de demostracion lista");
+          toast.success("Sesión de demostración lista");
           goAfterLogin();
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "No se pudo entrar");
@@ -22,7 +22,7 @@ export function DemoAccountButton() {
       }}
       className="w-full mt-3 border border-primary/40 bg-primary/10 text-primary rounded-lg py-2.5 text-sm hover:border-primary/70 transition"
     >
-      Entrar con cuenta de demostracion
+      Entrar con cuenta de demostración
     </button>
   );
 }

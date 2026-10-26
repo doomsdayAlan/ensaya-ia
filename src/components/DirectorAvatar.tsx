@@ -22,7 +22,7 @@ type DirectorAvatarProps = {
   mood?: DirectorMood;
   /** 0–100: celebra si alto, anima si bajo. */
   score?: number;
-  /** Etiqueta de origen (ej. Notas del director · Gemini). */
+  /** Etiqueta de origen (ej. Notas del director · plantillas locales). */
   sourceLabel?: string;
   /** Si true, lee el texto al montar (util en welcome futuro). */
   autoSpeak?: boolean;
@@ -101,7 +101,7 @@ export function DirectorAvatar({
       return;
     }
     if (!speechOk) {
-      setError("Usa Chrome o Edge para escuchar al director.");
+      setError("Usa Chrome o Edge en una conexión segura (HTTPS) para escuchar al director.");
       return;
     }
     if (!text.trim()) return;

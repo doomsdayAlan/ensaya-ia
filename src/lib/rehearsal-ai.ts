@@ -45,6 +45,11 @@ export function canUseSpeechSynthesis() {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+/** El reconocimiento y la síntesis de voz piden Chrome/Edge en HTTPS. */
+export function speechBrowserHint() {
+  return "Usa Chrome o Edge en una conexión segura (HTTPS).";
+}
+
 export {
   buildFeedback,
   effectiveMatchDifficulty,
@@ -114,7 +119,7 @@ export function speakLine(
   options?: { emotion?: string | null; applyEmotion?: boolean },
 ) {
   if (!canUseSpeechSynthesis()) {
-    return Promise.reject(new Error("Este navegador no puede hablar las lineas de IA."));
+    return Promise.reject(new Error("Este navegador no puede leer las líneas en voz alta."));
   }
 
   window.speechSynthesis.cancel();
@@ -146,7 +151,7 @@ export function speakLine(
         resolve();
         return;
       }
-      reject(new Error("No se pudo reproducir la linea de IA."));
+      reject(new Error("No se pudo reproducir la línea con la voz del navegador."));
     };
     window.speechSynthesis.speak(utterance);
   });
@@ -205,8 +210,8 @@ export function listenForLine(options: {
     if (event.error === "aborted" || event.error === "no-speech") return;
     options.onError?.(
       event.error === "not-allowed"
-        ? "Permite el microfono para que la IA te escuche."
-        : "No se pudo escuchar el microfono.",
+        ? "Permite el micrófono para que la app te escuche."
+        : "No se pudo escuchar el micrófono.",
     );
   };
 

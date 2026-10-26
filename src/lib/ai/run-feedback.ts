@@ -5,7 +5,10 @@ import type { RehearsalFeedbackInput, RehearsalFeedbackResult } from "@/lib/ai/t
 
 function withTimeout<T>(promise: Promise<T>, ms: number) {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("La IA tardo demasiado.")), ms);
+    const timer = setTimeout(
+      () => reject(new Error("Las notas del director tardaron demasiado.")),
+      ms,
+    );
     promise.then(
       (value) => {
         clearTimeout(timer);

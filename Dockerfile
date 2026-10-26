@@ -8,6 +8,10 @@ RUN npm ci --include=dev
 # Copia el arbol (public/ incluido; .dockerignore no lo excluye).
 COPY . .
 
+# Vite incrusta VITE_* en el cliente al construir. Default alineado con .env.example.
+ARG VITE_REQUIRE_AUTH=true
+ENV VITE_REQUIRE_AUTH=$VITE_REQUIRE_AUTH
+
 # Falla temprano si falta el OG fuente o el artefacto de build.
 RUN test -f public/og-ensaya-ia.jpg \
   && node -v \

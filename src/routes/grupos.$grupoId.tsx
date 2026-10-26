@@ -537,10 +537,10 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
     return (
       <div className="bg-card border border-border/60 rounded-xl p-8 text-center">
         <Mic className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground mb-1">Aun no hay grabaciones en este grupo.</p>
+        <p className="text-sm text-muted-foreground mb-1">Aún no hay grabaciones en este grupo.</p>
         <p className="text-xs text-muted-foreground">
           En Configurar ensayo elige modo <span className="text-foreground">En grupo</span>,
-          interpreta tu personaje y las tomas se guardan por linea y por miembro.
+          interpreta tu personaje y las tomas se guardan por línea y por miembro.
         </p>
       </div>
     );
@@ -550,8 +550,8 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <p className="text-xs text-muted-foreground">
-          {visibles.length} grabacion{visibles.length === 1 ? "" : "es"} · una toma por miembro y
-          linea.
+          {visibles.length} grabación{visibles.length === 1 ? "" : "es"} · una toma por miembro y
+          línea.
         </p>
         {escenas.length > 0 && (
           <select

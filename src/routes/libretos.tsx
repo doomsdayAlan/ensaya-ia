@@ -24,6 +24,7 @@ import {
   X,
   RotateCcw,
   CheckCircle2,
+  Plus,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
@@ -42,8 +43,11 @@ import {
   softDeleteScript,
   toggleScriptFavorite,
   updateScript,
+  updateScriptDialogue,
+  createBlankScript,
   type ScriptRecord,
 } from "@/lib/rehearsal-data";
+import { dialogueFromSetup } from "@/lib/local-library";
 
 export const Route = createFileRoute("/libretos")({
   component: Libretos,
@@ -65,6 +69,7 @@ function getScriptIcon(script: Pick<ScriptRecord, "title" | "genre"> | null) {
 function Libretos() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const keepEditingRef = useRef(false);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("Todos");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
@@ -78,6 +83,7 @@ function Libretos() {
     genre: "",
     act_count: 1,
     description: "",
+    dialogue: "",
   });
 
   const { data: currentUserId } = useQuery({
@@ -157,14 +163,21 @@ function Libretos() {
       genre: selectedScript.genre ?? "",
       act_count: selectedScript.act_count,
       description: selectedScript.description ?? "",
+      dialogue: dialogueFromSetup(selectedScript.id),
     });
-    setEditing(false);
+    if (keepEditingRef.current) {
+      keepEditingRef.current = false;
+      setEditing(true);
+    } else {
+      setEditing(false);
+    }
     setShowCharacters(false);
   }, [selectedScript]);
 
   const refreshScripts = () => {
     queryClient.invalidateQueries({ queryKey: ["scripts"] });
     queryClient.invalidateQueries({ queryKey: ["script-details"] });
+    queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
   };
 
   const importMutation = useMutation({
@@ -179,16 +192,38 @@ function Libretos() {
       toast.error(error instanceof Error ? error.message : "No se pudo importar el libreto"),
   });
 
+  const createMutation = useMutation({
+    mutationFn: () => createBlankScript("Nuevo libreto"),
+    onSuccess: (script) => {
+      keepEditingRef.current = true;
+      queryClient.setQueryData(["scripts", "with-trash"], (current: ScriptRecord[] | undefined) => {
+        if (!current) return [script];
+        return [script, ...current.filter((item) => item.id !== script.id)];
+      });
+      refreshScripts();
+      setSelectedId(script.id);
+      setActiveTab("Mis libretos");
+      setEditing(true);
+      toast.success("Libreto creado. Edita el título y las líneas.");
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "No se pudo crear el libreto"),
+  });
+
   const updateMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!selectedScript) throw new Error("Selecciona un libreto.");
-      return updateScript(selectedScript.id, {
+      const updated = await updateScript(selectedScript.id, {
         title: editForm.title.trim(),
         author: editForm.author.trim() || null,
         genre: editForm.genre.trim() || null,
         act_count: Math.max(1, editForm.act_count),
         description: editForm.description.trim() || null,
       });
+      if (editForm.dialogue.trim()) {
+        await updateScriptDialogue(selectedScript.id, editForm.dialogue);
+      }
+      return updated;
     },
     onSuccess: () => {
       refreshScripts();
@@ -267,7 +302,7 @@ function Libretos() {
     if (!file) return;
 
     if (!currentUserId) {
-      toast.error("Inicia sesion para importar libretos.");
+      toast.error("Inicia sesión para importar libretos.");
       return;
     }
 
@@ -287,7 +322,7 @@ function Libretos() {
 
   function openImporter() {
     if (!currentUserId) {
-      toast.error("Inicia sesion para importar libretos.");
+      toast.error("Inicia sesión para importar libretos.");
       return;
     }
     fileInputRef.current?.click();
@@ -315,9 +350,9 @@ function Libretos() {
 
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-4xl">Gestion de libretos</h1>
+          <h1 className="font-display text-4xl">Gestión de libretos</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Organiza, importa (.txt, .md o PDF) y administra tus guiones teatrales.
+            Crea un libreto, importa (.txt, .md o PDF) y edita las líneas de diálogo.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -330,6 +365,15 @@ function Libretos() {
               className="bg-surface border border-border/60 rounded-lg pl-9 pr-3 py-2 text-sm w-64 focus:outline-none focus:border-primary/50"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => createMutation.mutate()}
+            disabled={createMutation.isPending}
+            className="inline-flex items-center gap-2 border border-primary/40 text-primary bg-surface rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            <Plus className="w-4 h-4" />
+            {createMutation.isPending ? "Creando..." : "Nuevo libreto"}
+          </button>
           <button
             onClick={openImporter}
             disabled={importMutation.isPending}
@@ -372,7 +416,7 @@ function Libretos() {
                 className="text-sm text-muted-foreground border border-border/60 rounded-md px-2.5 py-1.5 bg-surface focus:outline-none focus:border-primary/50"
               >
                 <option value="recent">Mas recientes</option>
-                <option value="title">Titulo</option>
+                <option value="title">Título</option>
                 <option value="author">Autor</option>
               </select>
               <div className="flex border border-border/60 rounded-md overflow-hidden bg-surface">
@@ -462,18 +506,20 @@ function Libretos() {
                   <div className="flex flex-wrap gap-1.5 mb-4">
                     {selectedScript.is_active && <Pill label="Activo" tone="primary" />}
                     {selectedScript.source_type === "imported" && <Pill label="Importado" />}
+                    {selectedScript.source_type === "created" && <Pill label="Creado" />}
+                    {selectedScript.is_public && <Pill label="Público" tone="primary" />}
                     {selectedScript.source_type === "duplicated" && <Pill label="Copia" />}
                     {isTrash && <Pill label="Papelera" tone="danger" />}
                   </div>
 
                   <dl className="space-y-2 text-sm mb-5">
                     {[
-                      ["Genero", selectedScript.genre ?? "Sin genero"],
+                      ["Género", selectedScript.genre ?? "Sin género"],
                       ["Estructura", formatActCount(selectedScript.act_count)],
                       ["Escenas", `${details?.scenes.length ?? 0}`],
                       ["Personajes", `${details?.characters.length ?? 0}`],
-                      ["Lineas", `${details?.lines.length ?? 0}`],
-                      ["Ultima actualizacion", formatRelativeDate(selectedScript.updated_at)],
+                      ["Líneas", `${details?.lines.length ?? 0}`],
+                      ["Última actualización", formatRelativeDate(selectedScript.updated_at)],
                     ].map(([key, value]) => (
                       <div key={key} className="flex justify-between gap-2 text-xs">
                         <dt className="text-muted-foreground">{key}</dt>
@@ -484,7 +530,7 @@ function Libretos() {
 
                   <div className="mb-5">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                      Descripcion
+                      Descripción
                     </p>
                     <p className="text-xs leading-relaxed text-foreground/80">
                       {selectedScript.description ?? "Este libreto aun no tiene descripcion."}
@@ -504,7 +550,7 @@ function Libretos() {
                           >
                             <span>{character.name}</span>
                             <span className="text-muted-foreground">
-                              {character.actor_type === "user" ? "Tu" : "IA"}
+                              {character.actor_type === "user" ? "Tú" : "Voz"}
                             </span>
                           </div>
                         ))}
@@ -675,6 +721,7 @@ function EditForm({
     genre: string;
     act_count: number;
     description: string;
+    dialogue: string;
   };
   onChange: (value: {
     title: string;
@@ -682,6 +729,7 @@ function EditForm({
     genre: string;
     act_count: number;
     description: string;
+    dialogue: string;
   }) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -690,7 +738,7 @@ function EditForm({
   return (
     <div className="space-y-3 mb-5">
       <TextField
-        label="Titulo"
+        label="Título"
         value={value.title}
         onChange={(title) => onChange({ ...value, title })}
       />
@@ -701,7 +749,7 @@ function EditForm({
       />
       <div className="grid grid-cols-[1fr_96px] gap-2">
         <TextField
-          label="Genero"
+          label="Género"
           value={value.genre}
           onChange={(genre) => onChange({ ...value, genre })}
         />
@@ -720,7 +768,7 @@ function EditForm({
       </div>
       <div>
         <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-          Descripcion
+          Descripción
         </label>
         <textarea
           value={value.description}
@@ -728,6 +776,24 @@ function EditForm({
           rows={4}
           className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-primary/50"
         />
+      </div>
+      <div>
+        <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+          Diálogo
+        </label>
+        <textarea
+          value={value.dialogue}
+          onChange={(event) => onChange({ ...value, dialogue: event.target.value })}
+          rows={10}
+          spellCheck
+          placeholder={
+            "Actor:\nEscribe aquí tu línea.\n\nCompañero:\nRespuesta del otro personaje."
+          }
+          className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm resize-y min-h-40 focus:outline-none focus:border-primary/50 font-mono"
+        />
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Una línea por párrafo. Formato: Nombre: y el texto debajo o en la misma línea.
+        </p>
       </div>
       <div className="flex gap-2">
         <button

@@ -12,10 +12,11 @@ import { loginLocalAccount } from "@/lib/local-auth";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Iniciar sesion - Ensaya IA" },
+      { title: "Iniciar sesión - Ensaya IA" },
       {
         name: "description",
-        content: "Accede a tu cuenta de Ensaya IA para gestionar libretos y ensayar con IA.",
+        content:
+          "Accede a tu cuenta de Ensaya IA para gestionar libretos y ensayar con voz del navegador.",
       },
     ],
   }),
@@ -39,10 +40,10 @@ function Login() {
     try {
       await loginLocalAccount({ email, password });
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-      toast.success("Sesion iniciada");
+      toast.success("Sesión iniciada");
       goAfterLogin();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo iniciar sesion");
+      toast.error(error instanceof Error ? error.message : "No se pudo iniciar sesión");
     } finally {
       setLoading(false);
     }
@@ -51,19 +52,19 @@ function Login() {
   return (
     <AuthShell
       title="Bienvenido de nuevo"
-      subtitle="Inicia sesion. Tu cuenta se guarda en la base de datos de este navegador."
+      subtitle="Inicia sesión. Tu cuenta se guarda en la base de datos de este navegador."
       footer={
         <>
-          Aun no tienes cuenta?{" "}
+          ¿Aún no tienes cuenta?{" "}
           <Link to="/register" className="text-primary hover:underline">
-            Registrate
+            Regístrate
           </Link>
         </>
       }
     >
       <form onSubmit={submit}>
         <Field
-          label="Correo electronico"
+          label="Correo electrónico"
           type="email"
           placeholder="tu@correo.com"
           icon={<Mail className="w-4 h-4" />}
@@ -73,7 +74,7 @@ function Login() {
           autoComplete="email"
         />
         <Field
-          label="Contrasena"
+          label="Contraseña"
           type="password"
           placeholder="********"
           icon={<Lock className="w-4 h-4" />}
@@ -100,7 +101,7 @@ function Login() {
         <div className="flex items-center gap-3 my-6">
           <div className="h-px flex-1 bg-border" />
           <span className="text-[10px] tracking-widest text-muted-foreground uppercase">
-            o continua con
+            o continúa con
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>

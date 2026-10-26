@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
+import { addCharacterToScript, getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
 import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
 import { getLocalScriptSetup } from "@/lib/local-library";
@@ -29,9 +29,14 @@ export const Route = createFileRoute("/configuracion-ensayo")({
 });
 
 const MODES = [
-  { icon: User, value: "individual", label: "Individual", desc: "Ensaya solo con IA." },
+  {
+    icon: User,
+    value: "individual",
+    label: "Individual",
+    desc: "Ensaya tus líneas; los otros papeles se leen en voz alta.",
+  },
   { icon: Users, value: "grupo", label: "En grupo", desc: "Con otros actores." },
-  { icon: BookOpen, value: "lectura", label: "Lectura", desc: "Lectura sin actuacion." },
+  { icon: BookOpen, value: "lectura", label: "Lectura", desc: "Lectura sin actuación." },
 ] as const;
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -94,6 +99,8 @@ function ConfigEnsayo() {
   const [feedback, setFeedback] = useState(true);
   const [lockedGrupoId, setLockedGrupoId] = useState<string | null>(grupoIdFromSearch ?? null);
   const [useProfileVoiceForAll, setUseProfileVoiceForAll] = useState(false);
+  const [addingCharacter, setAddingCharacter] = useState(false);
+  const [newCharacterName, setNewCharacterName] = useState("");
 
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
@@ -200,7 +207,7 @@ function ConfigEnsayo() {
       const member = await isMiembroDelGrupo(grupoIdFromSearch);
       if (cancelled) return;
       if (!member) {
-        toast.error("No eres miembro de ese grupo. Se usara modo individual.");
+        toast.error("No eres miembro de ese grupo. Se usará modo individual.");
         setMode("individual");
         setLockedGrupoId(null);
         return;
@@ -244,13 +251,36 @@ function ConfigEnsayo() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar"),
   });
 
+  const selectedCatalogScript = visibleScripts.find((script) => script.id === selectedScriptId);
+  const canAddCharacter = Boolean(
+    currentUserId &&
+    selectedCatalogScript &&
+    selectedCatalogScript.user_id === currentUserId &&
+    selectedScriptId.startsWith("local-"),
+  );
+
+  const addCharacter = useMutation({
+    mutationFn: () => addCharacterToScript(selectedScriptId, newCharacterName),
+    onSuccess: (character) => {
+      queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+      queryClient.invalidateQueries({ queryKey: ["script-details"] });
+      queryClient.invalidateQueries({ queryKey: ["scripts"] });
+      setSelectedCharacterId(character.id);
+      setNewCharacterName("");
+      setAddingCharacter(false);
+      toast.success(`${character.name} se agrego al libreto.`);
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "No se pudo agregar el personaje"),
+  });
+
   const startRehearsal = useMutation({
     mutationFn: async () => {
       if (!setup?.script || !setup.scene) {
         throw new Error("Selecciona un libreto y una escena.");
       }
       if (!setup.lines?.length) {
-        throw new Error("La escena seleccionada no tiene lineas para sincronizar.");
+        throw new Error("La escena seleccionada no tiene líneas para sincronizar.");
       }
       if (!selectedCharacter) {
         throw new Error("Selecciona el personaje que vas a interpretar.");
@@ -298,8 +328,8 @@ function ConfigEnsayo() {
       queryClient.invalidateQueries({ queryKey: ["recent-rehearsals"] });
       toast.success(
         active.supabaseSessionId
-          ? "Ensayo listo. La IA usara la voz del navegador."
-          : "Ensayo local listo (sin cuenta). La IA usara la voz del navegador.",
+          ? "Ensayo listo. Los otros papeles se leerán con la voz del navegador."
+          : "Ensayo local listo (sin cuenta). Los otros papeles se leerán con la voz del navegador.",
       );
       nav({ to: "/ensayo" });
     },
@@ -318,9 +348,9 @@ function ConfigEnsayo() {
       <TopBar />
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-4xl">Configuracion de ensayo</h1>
+          <h1 className="font-display text-4xl">Configuración de ensayo</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Elige libreto, personaje y arranca el ensayo. La IA habla las otras lineas en el
+            Elige libreto, personaje y arranca el ensayo. Los demás papeles se leen con la voz de tu
             navegador.
           </p>
         </div>
@@ -379,17 +409,52 @@ function ConfigEnsayo() {
 
           <Section
             title="2. Personajes"
-            subtitle="Selecciona quien interpretas y revisa las voces de IA."
+            subtitle="Selecciona quién interpretas y revisa las voces sintéticas."
             action={
-              <button className="inline-flex items-center gap-1.5 text-xs bg-primary/10 text-primary border border-primary/30 rounded-lg px-3 py-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canAddCharacter) {
+                    toast.error(
+                      "Duplica el libreto en Libretos para agregar personajes a una copia tuya.",
+                    );
+                    return;
+                  }
+                  setAddingCharacter((open) => !open);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs bg-primary/10 text-primary border border-primary/30 rounded-lg px-3 py-1.5"
+              >
                 <Plus className="w-3.5 h-3.5" /> Agregar personaje
               </button>
             }
           >
+            {addingCharacter && canAddCharacter && (
+              <form
+                className="flex flex-wrap gap-2 mb-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  addCharacter.mutate();
+                }}
+              >
+                <input
+                  value={newCharacterName}
+                  onChange={(event) => setNewCharacterName(event.target.value)}
+                  placeholder="Nombre del personaje"
+                  className="flex-1 min-w-40 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                />
+                <button
+                  type="submit"
+                  disabled={addCharacter.isPending || newCharacterName.trim().length < 2}
+                  className="inline-flex items-center gap-1.5 bg-primary-gradient text-primary-foreground rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-60"
+                >
+                  {addCharacter.isPending ? "Agregando..." : "Guardar"}
+                </button>
+              </form>
+            )}
             <div className="space-y-3">
               {(setup?.characters || []).filter(Boolean).map((character) => {
                 const active = selectedCharacterId === character.id;
-                const tag = character.actor_type === "user" ? "Tu" : "IA";
+                const tag = character.actor_type === "user" ? "Tú" : "Voz";
 
                 return (
                   <button
@@ -409,7 +474,7 @@ function ConfigEnsayo() {
                         <div className="text-sm flex items-center gap-1.5">
                           {character.name}
                           <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded ${tag === "Tu" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${tag === "Tú" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
                           >
                             {tag}
                           </span>
@@ -422,9 +487,9 @@ function ConfigEnsayo() {
                     <MiniValue
                       label="Voz"
                       value={character.voice ?? "Sin voz"}
-                      icon={tag === "IA" ? <Volume2 className="w-3.5 h-3.5" /> : null}
+                      icon={tag === "Voz" ? <Volume2 className="w-3.5 h-3.5" /> : null}
                     />
-                    <MiniValue label="Emocion base" value={character.base_emotion ?? "Neutral"} />
+                    <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
                     <div />
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
                   </button>
@@ -461,7 +526,7 @@ function ConfigEnsayo() {
                 })}
               </div>
               <p className="text-xs text-muted-foreground mb-2 inline-flex items-center gap-1">
-                Dificultad de la IA <Info className="w-3 h-3" />
+                Exigencia al decir tu línea <Info className="w-3 h-3" />
               </p>
               <input
                 type="range"
@@ -472,34 +537,34 @@ function ConfigEnsayo() {
                 className="w-full accent-primary"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                <span>Facil</span>
+                <span>Fácil</span>
                 <span>Media</span>
                 <span>Avanzada</span>
               </div>
             </Section>
 
-            <Section title="4. Opciones de IA">
+            <Section title="4. Opciones de ensayo">
               <ToggleRow
-                label="Sugerir emociones"
-                desc="La IA sugerira emociones durante la escena."
+                label="Mostrar emociones"
+                desc="Mostrar la emoción indicada en cada línea y ajustar el tono de la voz sintética."
                 on={emo}
                 onChange={setEmo}
               />
               <ToggleRow
-                label="Improvisacion"
-                desc="La IA puede improvisar lineas ocasionales."
+                label="Permitir variaciones"
+                desc="Permitir pequeñas variaciones: la comparación acepta diferencias de palabras al decir tu línea."
                 on={improv}
                 onChange={setImprov}
               />
               <ToggleRow
-                label="Feedback al finalizar"
-                desc="Gemini redacta notas de director al terminar. Si no hay clave, se usan notas locales."
+                label="Notas al finalizar"
+                desc="Notas del director generadas con un modelo de lenguaje (si está configurado) o con plantillas locales."
                 on={feedback}
                 onChange={setFeedback}
               />
               <ToggleRow
                 label="Usar mi voz del perfil para todos"
-                desc="Por defecto la voz del perfil es solo del director/lector; activalo para que todos los personajes la usen."
+                desc="Por defecto la voz del perfil es solo del director/lector; actívalo para que todos los personajes la usen."
                 on={useProfileVoiceForAll}
                 onChange={setUseProfileVoiceForAll}
               />
@@ -542,23 +607,26 @@ function ConfigEnsayo() {
                   <span
                     className={`text-[10px] px-1.5 py-0.5 rounded ${character.id === selectedCharacter?.id ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
                   >
-                    {character.id === selectedCharacter?.id ? "Tu" : "IA"}
+                    {character.id === selectedCharacter?.id ? "Tú" : "Voz"}
                   </span>
                 </div>
               ))}
           </div>
           <button className="w-full text-xs text-primary border border-primary/30 rounded-md py-1.5 mb-5">
-            {setup?.lines?.length ?? 0} lineas cargadas
+            {setup?.lines?.length ?? 0} líneas cargadas
           </button>
 
-          <p className="text-[10px] tracking-[0.25em] text-muted-foreground mb-2">CONFIGURACION</p>
+          <p className="text-[10px] tracking-[0.25em] text-muted-foreground mb-2">CONFIGURACIÓN</p>
           <dl className="text-xs space-y-1.5 mb-5">
             {[
               ["Modo de ensayo", selectedMode.label],
-              ["Dificultad de la IA", diff < 33 ? "Facil" : diff < 66 ? "Media" : "Avanzada"],
-              ["Sugerir emociones", emo ? "Si" : "No"],
-              ["Improvisacion", improv ? "Si" : "No"],
-              ["Feedback al finalizar", feedback ? "Si" : "No"],
+              [
+                "Exigencia al decir tu línea",
+                diff < 33 ? "Fácil" : diff < 66 ? "Media" : "Avanzada",
+              ],
+              ["Mostrar emociones", emo ? "Sí" : "No"],
+              ["Permitir variaciones", improv ? "Sí" : "No"],
+              ["Notas al finalizar", feedback ? "Sí" : "No"],
             ].map(([key, value]) => (
               <div key={key} className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">{key}</dt>
@@ -569,9 +637,9 @@ function ConfigEnsayo() {
           <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs flex gap-2">
             <Sparkles className="w-4 h-4 text-primary shrink-0" />
             <div>
-              <div className="text-primary">Listo para ensayar con IA en local.</div>
+              <div className="text-primary">Listo para ensayar en este dispositivo.</div>
               <div className="text-muted-foreground">
-                Tu microfono + voz del navegador. No hace falta FastAPI para esta version.
+                Tu micrófono y la voz del navegador. Las notas de director son opcionales.
               </div>
             </div>
           </div>

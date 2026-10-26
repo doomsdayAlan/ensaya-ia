@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { Mic, Volume2, Bell, Shield, Download, Save, User, LogIn, Database } from "lucide-react";
-import { getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
+import {
+  applyPrivacyToMyScripts,
+  getPerfilUsuario,
+  updatePerfilUsuario,
+} from "@/lib/rehearsal-data";
+import { requestNotificationPermission } from "@/lib/session-prefs";
 import { isAuthRequired, setAuthRequired } from "@/lib/app-config";
 import { getStoredUserCount } from "@/lib/local-auth";
 
@@ -22,7 +27,7 @@ const MODES = [
 const PRIVACY = [
   ["privado", "Privado"],
   ["equipo", "Equipo"],
-  ["publico", "Publico"],
+  ["publico", "Público"],
 ] as const;
 
 function Configuracion() {
@@ -59,8 +64,8 @@ function Configuracion() {
   }, [profile]);
 
   const saveProfile = useMutation({
-    mutationFn: () =>
-      updatePerfilUsuario({
+    mutationFn: async () => {
+      const saved = await updatePerfilUsuario({
         display_name: displayName,
         preferred_voice: preferredVoice,
         rehearsal_mode: mode,
@@ -68,10 +73,47 @@ function Configuracion() {
         notifications_enabled: notifications,
         offline_mode_enabled: offline,
         privacy_level: privacy,
-      }),
-    onSuccess: () => {
+      });
+      const privacyChanged = await applyPrivacyToMyScripts(privacy);
+      return { saved, privacyChanged };
+    },
+    onSuccess: ({ privacyChanged }) => {
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
-      toast.success("Perfil guardado en este dispositivo");
+      queryClient.invalidateQueries({ queryKey: ["scripts"] });
+      if (notifications) {
+        void requestNotificationPermission().then((permission) => {
+          if (permission === "denied") {
+            toast.error(
+              "El navegador bloqueó las notificaciones del sistema. Los avisos de sesión de la app siguen activos.",
+            );
+          }
+        });
+      }
+      const parts = ["Perfil guardado"];
+      parts.push(
+        notifications
+          ? "avisos de sesión activos"
+          : "avisos de sesión desactivados (los errores se siguen mostrando)",
+      );
+      parts.push(
+        offline
+          ? "modo sin conexión: las notas del director usan plantillas locales"
+          : "notas del director con modelo de lenguaje si está configurado, o plantillas locales",
+      );
+      if (privacy === "publico") {
+        parts.push(
+          privacyChanged
+            ? "tus libretos ahora aparecen como públicos"
+            : "tus libretos siguen públicos",
+        );
+      } else {
+        parts.push(
+          privacyChanged
+            ? "tus libretos quedan privados en este dispositivo"
+            : "tus libretos siguen privados",
+        );
+      }
+      toast.success(parts.join(". "));
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar"),
   });
@@ -81,7 +123,7 @@ function Configuracion() {
       <TopBar />
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-4xl">Configuracion</h1>
+          <h1 className="font-display text-4xl">Configuración</h1>
         </div>
         <button
           onClick={() => saveProfile.mutate()}
@@ -104,7 +146,7 @@ function Configuracion() {
       )}
       {data && !data.isAuthenticated && (
         <div className="bg-card border border-primary/30 rounded-xl p-4 text-sm text-muted-foreground mb-5">
-          Estas viendo valores de invitado. Inicia sesion para guardar tu perfil en este
+          Estás viendo valores de invitado. Inicia sesión para guardar tu perfil en este
           dispositivo.
         </div>
       )}
@@ -130,7 +172,7 @@ function Configuracion() {
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
               className="mt-1 mb-5 w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
-              placeholder="Tu nombre artistico"
+              placeholder="Tu nombre artístico"
             />
             <div className="grid sm:grid-cols-2 gap-4">
               <SelectBlock
@@ -183,15 +225,15 @@ function Configuracion() {
             {import.meta.env.DEV && (
               <SettingCard
                 icon={LogIn}
-                title="Pedir inicio de sesion (solo desarrollo)"
-                desc="En produccion manda VITE_REQUIRE_AUTH. Este interruptor no aparece fuera de desarrollo."
+                title="Pedir inicio de sesión (solo desarrollo)"
+                desc="En producción manda VITE_REQUIRE_AUTH. Este interruptor no aparece fuera de desarrollo."
                 enabled={requireLogin}
                 onToggle={(value) => {
                   setRequireLogin(value);
                   setAuthRequired(value);
                   toast.success(
                     value
-                      ? "La app pedira sesion para entrar"
+                      ? "La app pedirá sesión para entrar"
                       : "La app permite entrar como invitado",
                   );
                 }}
@@ -200,14 +242,14 @@ function Configuracion() {
             <SettingCard
               icon={Bell}
               title="Notificaciones"
-              desc="Avisos de sesiones, recordatorios y novedades."
+              desc="Si está activo, avisa al iniciar y al guardar un ensayo. Si lo apagas, esos avisos desaparecen."
               enabled={notifications}
               onToggle={setNotifications}
             />
             <SettingCard
               icon={Download}
-              title="Modo sin conexion"
-              desc="Preferencia para preparar libretos y audios offline."
+              title="Modo sin conexión"
+              desc="Las notas del director usan plantillas locales. El ensayo y los libretos siguen en este dispositivo."
               enabled={offline}
               onToggle={setOffline}
             />
@@ -219,7 +261,8 @@ function Configuracion() {
                 <div>
                   <h3 className="font-medium">Privacidad</h3>
                   <p className="text-sm text-muted-foreground">
-                    Controla quien puede ver tus libretos.
+                    Público muestra tus libretos a otras cuentas de este dispositivo. Privado y
+                    Equipo los ocultan.
                   </p>
                 </div>
               </div>

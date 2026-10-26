@@ -132,7 +132,7 @@ export async function crearGrupo(
   codigoPersonalizado?: string,
 ) {
   const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Debes iniciar sesion para crear un grupo.");
+  if (!userId) throw new Error("Debes iniciar sesión para crear un grupo.");
   if (!canUseBrowserStorage()) throw new Error("No hay almacenamiento en este navegador.");
 
   const codigo = codigoPersonalizado?.trim().toUpperCase() || generarCodigo();
@@ -165,7 +165,7 @@ export async function crearGrupo(
 
 export async function unirseAGrupo(codigo: string) {
   const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Debes iniciar sesion para unirte a un grupo.");
+  if (!userId) throw new Error("Debes iniciar sesión para unirte a un grupo.");
 
   const store = readStore();
   const grupo = store.grupos.find((item) => item.codigo_invitacion === codigo.trim().toUpperCase());
@@ -496,7 +496,11 @@ export type GrupoGrabacionMeta = {
   audioUrl: string;
 };
 
+/** Grupo ficticio para persistir tomas del modo individual en IndexedDB. */
+export const INDIVIDUAL_TAKE_GROUP = "__individual__";
+
 /** Mapa { [lineId]: audioUrl } para reproducir lineas de otros actores en el ensayo. */
+
 export async function getGrabacionesGrupo(
   scriptId: string,
   grupoId?: string | null,
@@ -525,7 +529,7 @@ export async function saveGrabacionGrupo(input: {
   durationSec?: number | null;
 }): Promise<GrupoGrabacionMeta> {
   const userId = await getCurrentUserId();
-  if (!userId) throw new Error("Debes iniciar sesion para guardar la grabacion.");
+  if (!userId) throw new Error("Debes iniciar sesión para guardar la grabación.");
   if (!input.blob.size) throw new Error("La grabacion esta vacia.");
 
   const row = await upsertGrupoGrabacion({

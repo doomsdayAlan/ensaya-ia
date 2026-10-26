@@ -15,7 +15,7 @@ export const Route = createFileRoute("/register")({
       { title: "Crear cuenta - Ensaya IA" },
       {
         name: "description",
-        content: "Registrate en Ensaya IA y empieza a ensayar teatro con IA.",
+        content: "Regístrate en Ensaya IA y empieza a ensayar teatro con voz del navegador.",
       },
     ],
   }),
@@ -38,11 +38,11 @@ function Register() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accepted) {
-      toast.error("Debes aceptar los terminos para continuar");
+      toast.error("Debes aceptar los términos para continuar");
       return;
     }
     if (password.length < 8) {
-      toast.error("La contrasena debe tener al menos 8 caracteres");
+      toast.error("La contraseña debe tener al menos 8 caracteres");
       return;
     }
 
@@ -65,9 +65,9 @@ function Register() {
       subtitle="La cuenta se guarda en IndexedDB, la base de datos del navegador."
       footer={
         <>
-          Ya tienes cuenta?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link to="/login" className="text-primary hover:underline">
-            Inicia sesion
+            Inicia sesión
           </Link>
         </>
       }
@@ -75,7 +75,7 @@ function Register() {
       <form onSubmit={submit}>
         <Field
           label="Nombre"
-          placeholder="Tu nombre artistico"
+          placeholder="Tu nombre artístico"
           icon={<User className="w-4 h-4" />}
           value={name}
           onChange={setName}
@@ -83,7 +83,7 @@ function Register() {
           autoComplete="name"
         />
         <Field
-          label="Correo electronico"
+          label="Correo electrónico"
           type="email"
           placeholder="tu@correo.com"
           icon={<Mail className="w-4 h-4" />}
@@ -93,9 +93,9 @@ function Register() {
           autoComplete="email"
         />
         <Field
-          label="Contrasena"
+          label="Contraseña"
           type="password"
-          placeholder="Minimo 8 caracteres"
+          placeholder="Mínimo 8 caracteres"
           icon={<Lock className="w-4 h-4" />}
           value={password}
           onChange={setPassword}
@@ -112,13 +112,13 @@ function Register() {
           />
           <span>
             Acepto los{" "}
-            <a href="#" className="text-primary hover:underline">
-              terminos
-            </a>{" "}
+            <Link to="/terminos" className="text-primary hover:underline" target="_blank">
+              términos
+            </Link>{" "}
             y la{" "}
-            <a href="#" className="text-primary hover:underline">
-              politica de privacidad
-            </a>
+            <Link to="/privacidad" className="text-primary hover:underline" target="_blank">
+              política de privacidad
+            </Link>
             .
           </span>
         </label>

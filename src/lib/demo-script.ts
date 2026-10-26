@@ -21,7 +21,7 @@ export const DEMO_SCRIPT: ScriptRecord = {
   genre: "Drama",
   act_count: 2,
   description:
-    "Escena del balcon para ensayar en local. Si Supabase no responde, usamos este libreto de demostracion.",
+    "Escena del balcón para ensayar en local. Si Supabase no responde, usamos este libreto de demostración.",
   is_favorite: true,
   is_active: true,
   is_public: true,
@@ -81,7 +81,7 @@ const LINES: Array<{
     characterId: DEMO_ROMEO_ID,
     order: 1,
     text: "De que luz se alimenta esa ventana? Es el este, y Julieta es el sol!",
-    cue: "Tu linea. Habla en voz alta.",
+    cue: "Tu línea. Habla en voz alta.",
     duration: 6,
   },
   {
@@ -89,7 +89,7 @@ const LINES: Array<{
     characterId: DEMO_JULIETA_ID,
     order: 2,
     text: "Es Romeo, y Romeo es el mismo! Ah, Romeo, por que eres tu Romeo!",
-    cue: "La IA interpreta a Julieta.",
+    cue: "Julieta se lee con la voz del navegador.",
     duration: 4,
   },
   {

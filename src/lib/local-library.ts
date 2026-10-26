@@ -5,7 +5,12 @@ import type {
   ScriptRecord,
   ScriptSetup,
 } from "@/lib/rehearsal-data";
-import { cleanCharacterName, isCharacterCue, isSceneHeaderLine } from "@/lib/script-text";
+import {
+  cleanCharacterName,
+  isCharacterCue,
+  isSceneHeaderLine,
+  splitNamedCue,
+} from "@/lib/script-text";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
@@ -109,6 +114,13 @@ function parseSceneBody(body: string): ParsedImportLine[] {
     if (isCharacterCue(line)) {
       flush();
       currentCharacter = cleanCharacterName(line);
+      continue;
+    }
+    const named = splitNamedCue(line);
+    if (named) {
+      flush();
+      currentCharacter = named.name;
+      if (named.rest) buffer.push(named.rest);
       continue;
     }
     buffer.push(line);
@@ -283,6 +295,207 @@ export function duplicateLocalSetup(setup: ScriptSetup, userId: string) {
   };
   writeLibrary(library);
   return script;
+}
+
+const STARTER_DIALOGUE = `Actor:
+Escribe aquí tu primera línea.
+
+Compañero:
+Aquí responde el otro personaje.`;
+
+export function createBlankLocalScript(userId: string, title = "Nuevo libreto") {
+  const script = saveImportedLocalScript(
+    {
+      title,
+      genre: "Original",
+      description: "Libreto creado en este dispositivo.",
+      rawText: STARTER_DIALOGUE,
+    },
+    userId,
+    [
+      { characterName: "Actor", text: "Escribe aquí tu primera línea." },
+      { characterName: "Compañero", text: "Aquí responde el otro personaje." },
+    ],
+  );
+  return patchLocalScript(script.id, userId, { source_type: "created", genre: "Original" });
+}
+
+export function dialogueFromSetup(scriptId: string) {
+  const setup = getLocalScriptSetup(scriptId);
+  if (!setup?.lines.length) return STARTER_DIALOGUE;
+  const formatLines = (lines: typeof setup.lines) =>
+    lines.map((line) => `${line.character?.name ?? "Actor"}:\n${line.text}`).join("\n\n");
+  if (setup.scenes.length <= 1) return formatLines(setup.lines);
+  return setup.scenes
+    .map((scene) => {
+      const body = formatLines(setup.lines.filter((line) => line.scene_id === scene.id));
+      return body ? `${scene.title}\n${body}` : scene.title;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function rewriteLocalScriptDialogue(scriptId: string, userId: string, rawText: string) {
+  const sceneChunks = splitRawTextIntoScenes(rawText);
+  const sceneLineGroups =
+    sceneChunks.length === 1 && !isSceneHeaderLine(sceneChunks[0]?.title ?? "")
+      ? [{ title: currentScenesFallbackTitle(scriptId), lines: parseSceneBody(rawText) }]
+      : sceneChunks.map((chunk) => ({
+          title: chunk.title,
+          lines: parseSceneBody(chunk.body),
+        }));
+  const allLines = sceneLineGroups.flatMap((group) => group.lines);
+  if (allLines.length === 0) {
+    throw new Error("Escribe al menos una línea. Formato: Nombre:\\ntexto");
+  }
+
+  const library = readLibrary();
+  const index = library.scripts.findIndex(
+    (item) => item.id === scriptId && item.user_id === userId,
+  );
+  if (index < 0) throw new Error("No se encontro el libreto local.");
+  const current = library.setups[scriptId];
+  if (!current?.script) throw new Error("No se encontro el libreto local.");
+
+  const now = new Date().toISOString();
+  const names = Array.from(
+    new Set(allLines.map((line) => line.characterName).filter(Boolean)),
+  ) as string[];
+  const existingByName = new Map(
+    current.characters.map((character) => [character.name.trim().toUpperCase(), character]),
+  );
+  const characters: CharacterRecord[] = names.map((name, order) => {
+    const prev = existingByName.get(name.toUpperCase());
+    if (prev) return { ...prev, sort_order: order + 1 };
+    return {
+      id: `local-char-${crypto.randomUUID()}`,
+      script_id: scriptId,
+      name,
+      role: null,
+      actor_type: order === 0 ? "user" : "ai",
+      voice: order === 0 ? "Tu voz" : "Sofia (Femenina)",
+      base_emotion: "Neutral",
+      sort_order: order + 1,
+      created_at: now,
+    };
+  });
+  const byName = new Map(characters.map((character) => [character.name.toUpperCase(), character]));
+
+  const scenes = sceneLineGroups.map((group, sceneIndex) => {
+    const prev = current.scenes[sceneIndex];
+    return {
+      id: prev?.id ?? `local-scene-${crypto.randomUUID()}`,
+      script_id: scriptId,
+      title: group.title || `Escena ${sceneIndex + 1}`,
+      location: prev?.location ?? null,
+      description: prev?.description ?? "Escena del libreto.",
+      sort_order: sceneIndex + 1,
+      created_at: prev?.created_at ?? now,
+    };
+  });
+
+  const lines = sceneLineGroups.flatMap((group, sceneIndex) => {
+    const scene = scenes[sceneIndex]!;
+    return group.lines.map((line, order) => {
+      const character = line.characterName
+        ? (byName.get(line.characterName.toUpperCase()) ?? null)
+        : null;
+      return {
+        id: `local-line-${crypto.randomUUID()}`,
+        scene_id: scene.id,
+        character_id: character?.id ?? null,
+        line_order: order + 1,
+        text: line.text,
+        cue: null,
+        duration_seconds: Math.max(
+          3,
+          Math.min(12, Math.round(line.text.split(/\s+/).length / 2.4)),
+        ),
+        created_at: now,
+        character,
+      };
+    });
+  });
+
+  const updated = {
+    ...library.scripts[index],
+    raw_text: rawText,
+    act_count: Math.max(
+      library.scripts[index].act_count ?? 1,
+      sceneLineGroups.filter((group) => /^(ACTO|Acto)\b/i.test(group.title)).length || 1,
+    ),
+    updated_at: now,
+  };
+  library.scripts[index] = updated;
+  library.setups[scriptId] = {
+    script: updated,
+    scenes,
+    scene: scenes[0] ?? null,
+    characters,
+    lines,
+  };
+  writeLibrary(library);
+  return updated;
+}
+
+function currentScenesFallbackTitle(scriptId: string) {
+  return readLibrary().setups[scriptId]?.scenes[0]?.title ?? "Escena 1";
+}
+
+export function addLocalCharacter(
+  scriptId: string,
+  userId: string,
+  name: string,
+  opts?: { actorType?: "user" | "ai"; voice?: string },
+) {
+  const trimmed = name.trim();
+  if (trimmed.length < 2) throw new Error("El nombre del personaje debe tener al menos 2 letras.");
+  const library = readLibrary();
+  const owned = library.scripts.find((item) => item.id === scriptId && item.user_id === userId);
+  const setup = library.setups[scriptId];
+  if (!owned || !setup?.script) {
+    throw new Error("Solo puedes agregar personajes a un libreto tuyo en este dispositivo.");
+  }
+  const exists = setup.characters.some(
+    (character) => character.name.trim().toUpperCase() === trimmed.toUpperCase(),
+  );
+  if (exists) throw new Error("Ese personaje ya esta en el libreto.");
+  const now = new Date().toISOString();
+  const actorType = opts?.actorType ?? "ai";
+  const character: CharacterRecord = {
+    id: `local-char-${crypto.randomUUID()}`,
+    script_id: scriptId,
+    name: trimmed,
+    role: null,
+    actor_type: actorType,
+    voice: opts?.voice ?? (actorType === "user" ? "Tu voz" : "Sofia (Femenina)"),
+    base_emotion: "Neutral",
+    sort_order: setup.characters.length + 1,
+    created_at: now,
+  };
+  setup.characters = [...setup.characters, character];
+  owned.updated_at = now;
+  setup.script = owned;
+  writeLibrary(library);
+  return character;
+}
+
+export function applyPrivacyToOwnedScripts(userId: string, privacy: string) {
+  const isPublic = privacy === "publico";
+  const library = readLibrary();
+  let changed = 0;
+  library.scripts = library.scripts.map((script) => {
+    if (script.user_id !== userId) return script;
+    if (Boolean(script.is_public) === isPublic) return script;
+    changed += 1;
+    const updated = { ...script, is_public: isPublic, updated_at: new Date().toISOString() };
+    if (library.setups[script.id]?.script) {
+      library.setups[script.id] = { ...library.setups[script.id], script: updated };
+    }
+    return updated;
+  });
+  if (changed) writeLibrary(library);
+  return changed;
 }
 
 export function patchLocalScript(scriptId: string, userId: string, patch: Partial<ScriptRecord>) {

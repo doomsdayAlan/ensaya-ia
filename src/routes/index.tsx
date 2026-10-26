@@ -30,21 +30,21 @@ const QUICK = [
   {
     icon: Settings,
     title: "Configurar ensayo",
-    desc: "Define personajes, voces, emociones y dinamica.",
+    desc: "Define personajes, voces, emociones y dinámica.",
     cta: "Configurar",
     to: "/configuracion-ensayo",
   },
   {
     icon: Users,
     title: "Grupos",
-    desc: "Crea o unete a un grupo, asigna personajes y comparte el libreto.",
+    desc: "Crea o únete a un grupo, asigna personajes y comparte el libreto.",
     cta: "Abrir grupos",
     to: "/grupos",
   },
   {
     icon: Drama,
     title: "Modo ensayo",
-    desc: "La IA interpreta personajes en tiempo real contigo.",
+    desc: "Los demás personajes se leen en voz alta con la voz de tu navegador.",
     cta: "Comenzar",
     to: "/ensayo",
   },
@@ -74,7 +74,8 @@ function Index() {
               Ensaya <span className="text-gradient-primary italic">IA</span>
             </h1>
             <p className="text-muted-foreground max-w-md mb-8">
-              Practica escenas, interpreta personajes y deja que la IA complete los demas papeles.
+              Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de
+              tu navegador.
             </p>
             <Link
               to="/configuracion-ensayo"
@@ -131,7 +132,7 @@ function Index() {
         )}
         {!isLoading && !isError && recentRehearsals.length === 0 && (
           <div className="bg-card border border-border/60 rounded-xl p-4 text-sm text-muted-foreground">
-            Aun no hay ensayos registrados.
+            Aún no hay ensayos registrados.
           </div>
         )}
         {recentRehearsals.map((rehearsal) => {
@@ -151,7 +152,7 @@ function Index() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium">{title}</div>
                 <div className="text-xs text-muted-foreground">
-                  Ultima sesion: {formatRelativeDate(rehearsal.updated_at)}
+                  Última sesión: {formatRelativeDate(rehearsal.updated_at)}
                 </div>
               </div>
               <span className="text-xs px-2.5 py-1 rounded-full border border-primary/30 text-primary">

@@ -26,6 +26,7 @@ import {
   buildFeedback,
   canUseSpeechRecognition,
   canUseSpeechSynthesis,
+  speechBrowserHint,
   effectiveMatchDifficulty,
   evaluateSpokenLine,
   listenForLine,
@@ -41,9 +42,16 @@ import {
   loadScriptSetupSafe,
   saveLocalReport,
   type ActiveRehearsal,
+  type RehearsalLineNote,
 } from "@/lib/rehearsal-runtime";
 import { getDemoScriptSetup } from "@/lib/demo-script";
-import { getGrabacionesGrupo, getGrupoParaScript, saveGrabacionGrupo } from "@/lib/grupos-api";
+import {
+  getGrabacionesGrupo,
+  getGrupoParaScript,
+  INDIVIDUAL_TAKE_GROUP,
+  saveGrabacionGrupo,
+} from "@/lib/grupos-api";
+import { desktopNotice, isOfflineMode, sessionSuccess } from "@/lib/session-prefs";
 
 export const Route = createFileRoute("/ensayo")({
   component: Ensayo,
@@ -76,6 +84,7 @@ function Ensayo() {
   const scoresRef = useRef<number[]>([]);
   const skippedRef = useRef(0);
   const repeatedRef = useRef(0);
+  const lineNotesRef = useRef<RehearsalLineNote[]>([]);
   const failedLineIdRef = useRef<string | null>(null);
   const finalEvalTimerRef = useRef<number | null>(null);
   const accumulatedFinalRef = useRef("");
@@ -87,7 +96,7 @@ function Ensayo() {
     setSessionReady(true);
   }, []);
   const [connectionStatus, setConnectionStatus] = useState(
-    "Pulsa el microfono para comenzar el ensayo con IA.",
+    "Pulsa el micrófono para comenzar el ensayo.",
   );
   const [isRehearsing, setIsRehearsing] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -228,13 +237,18 @@ function Ensayo() {
 
   useEffect(() => {
     const sid = activeConfig?.scriptId ?? latest?.script_id;
-    if (!isGrupoMode || !sid) {
+    if (!sid) {
+      setGroupAudioUrls({});
+      return;
+    }
+    const takeGroupId = isGrupoMode ? grupoId : INDIVIDUAL_TAKE_GROUP;
+    if (isGrupoMode && !takeGroupId) {
       setGroupAudioUrls({});
       return;
     }
     let cancelled = false;
     const created: string[] = [];
-    void getGrabacionesGrupo(sid, grupoId)
+    void getGrabacionesGrupo(sid, takeGroupId)
       .then((urls) => {
         if (cancelled) {
           Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
@@ -252,12 +266,12 @@ function Ensayo() {
     };
   }, [isGrupoMode, activeConfig?.scriptId, latest?.script_id, grupoId]);
 
-  const persistGrupoTake = async (line: ScriptLineWithCharacter, blob: Blob | null) => {
-    if (!isGrupoMode || !blob?.size || !line.id) return;
+  const persistTake = async (line: ScriptLineWithCharacter, blob: Blob | null) => {
+    if (!blob?.size || !line.id) return;
     const sid = activeConfig?.scriptId ?? setup?.script?.id ?? latest?.script_id;
     if (!sid) return;
-    let resolvedGrupoId = grupoId;
-    if (!resolvedGrupoId) {
+    let resolvedGrupoId = isGrupoMode ? grupoId : INDIVIDUAL_TAKE_GROUP;
+    if (isGrupoMode && !resolvedGrupoId) {
       try {
         resolvedGrupoId = (await getGrupoParaScript(sid))?.grupoId ?? null;
       } catch {
@@ -308,6 +322,21 @@ function Ensayo() {
   const stopListenRef = useRef(stopListen);
   stopListenRef.current = stopListen;
 
+  const recordLineNote = (
+    line: ScriptLineWithCharacter | undefined,
+    opts?: { skipped?: boolean; score?: number },
+  ) => {
+    if (!line) return;
+    lineNotesRef.current.push({
+      lineId: line.id,
+      order: lineNotesRef.current.length + 1,
+      characterName: line.character?.name ?? selectedCharacter?.name ?? "Actor",
+      text: line.text,
+      skipped: Boolean(opts?.skipped),
+      score: typeof opts?.score === "number" ? opts.score : null,
+    });
+  };
+
   const finishRehearsal = async (reason: "done" | "manual") => {
     stopListen();
     stopSpeaking();
@@ -339,7 +368,7 @@ function Ensayo() {
     const { memorization, clarity, expression, rhythm, projection, score } = scored;
     const endedAt = new Date().toISOString();
     const fallbackFeedback = isLectura
-      ? "Modo lectura: se reprodujeron las lineas sin evaluar memorizacion."
+      ? "Modo lectura: se reprodujeron las líneas sin evaluar memorización."
       : buildFeedback({
           memorization,
           completed: completedLines,
@@ -349,7 +378,7 @@ function Ensayo() {
     let feedback = fallbackFeedback;
     let feedbackSource = "template";
     // Lectura: no pedir notas de director al modelo (no hay memorizacion que evaluar).
-    const wantsAiNotes = !isLectura && activeConfig?.feedbackEnabled !== false;
+    const wantsAiNotes = !isLectura && activeConfig?.feedbackEnabled !== false && !isOfflineMode();
     if (wantsAiNotes) {
       try {
         const notes = await requestRehearsalFeedback({
@@ -397,7 +426,8 @@ function Ensayo() {
           projection,
           score,
           feedback,
-          feedbackSource,
+          feedbackSource: !isLectura && isOfflineMode() ? "offline-template" : feedbackSource,
+          lineNotes: [...lineNotesRef.current],
         },
         {
           script: setup?.script ?? null,
@@ -434,10 +464,14 @@ function Ensayo() {
         feedback_summary: feedback,
         teleprompter_status: "stopped",
         teleprompter_last_event:
-          reason === "done" ? "Escena completada con IA local." : "Ensayo finalizado.",
+          reason === "done" ? "Escena completada con voz del navegador." : "Ensayo finalizado.",
       }).catch(() => null);
     }
 
+    sessionSuccess(
+      reason === "done" ? "Ensayo guardado en tu historial." : "Ensayo finalizado y guardado.",
+    );
+    desktopNotice("Ensaya IA", "Tu ensayo quedó guardado en el historial.");
     nav({ to: "/finalizado" });
   };
 
@@ -449,6 +483,8 @@ function Ensayo() {
     setIsSpeaking(false);
     setTranscript("");
     failedLineIdRef.current = null;
+
+    recordLineNote(currentLine, opts);
 
     if (opts?.skipped) skippedRef.current += 1;
     if (typeof opts?.score === "number") {
@@ -478,12 +514,12 @@ function Ensayo() {
     setLastScore(verdict.score);
     if (verdict.accepted) {
       setConnectionStatus(`Linea reconocida (${verdict.percent}%).`);
-      toast.success("La IA reconocio tu linea");
+      sessionSuccess("Tu línea coincidió con el libreto");
       setTypedLine("");
       const line = currentLine;
       void (async () => {
         const blob = await stopTakeAndGetBlob();
-        await persistGrupoTake(line, blob);
+        await persistTake(line, blob);
         advance({ score: verdict.score });
       })();
       return true;
@@ -515,8 +551,8 @@ function Ensayo() {
         suggestEmotions && character?.base_emotion ? ` · emocion: ${character.base_emotion}` : "";
       setConnectionStatus(
         isMyTurn
-          ? `Lectura: tu linea (${character?.name ?? "Tu"})${emotionHint}`
-          : `Lectura: ${character?.name ?? "IA"}${emotionHint}`,
+          ? `Lectura: tu línea (${character?.name ?? "Tú"})${emotionHint}`
+          : `Lectura: ${character?.name ?? "Voz"}${emotionHint}`,
       );
       setIsSpeaking(true);
       setIsListening(false);
@@ -541,7 +577,7 @@ function Ensayo() {
         .catch((error) => {
           if (cancelled) return;
           setIsSpeaking(false);
-          setConnectionStatus(error instanceof Error ? error.message : "No se pudo leer la linea.");
+          setConnectionStatus(error instanceof Error ? error.message : "No se pudo leer la línea.");
         });
 
       return () => {
@@ -555,11 +591,11 @@ function Ensayo() {
       stopSpeaking();
       if (!canUseSpeechRecognition()) {
         setConnectionStatus(
-          "Este navegador no reconoce voz. Usa Chrome o Edge, o avanza la linea a mano.",
+          "Este navegador no reconoce voz. Usa Chrome o Edge en una conexión segura (HTTPS), o avanza la línea a mano.",
         );
         return;
       }
-      setConnectionStatus("Tu turno. Di la linea en voz alta.");
+      setConnectionStatus("Tu turno. Di la línea en voz alta.");
       stopListen();
       void startTake();
       accumulatedFinalRef.current = "";
@@ -603,13 +639,13 @@ function Ensayo() {
     }
 
     const character = currentLine.character;
-    const savedUrl = isGrupoMode ? groupAudioUrls[currentLine.id] : undefined;
+    const savedUrl = groupAudioUrls[currentLine.id];
     const emotionHint =
       suggestEmotions && character?.base_emotion ? ` · emocion: ${character.base_emotion}` : "";
     setConnectionStatus(
       savedUrl
         ? `${character?.name ?? "Actor"} (grabacion del grupo)${emotionHint}...`
-        : `${character?.name ?? "IA"} esta interpretando su linea${emotionHint}...`,
+        : `${character?.name ?? "Voz"} está leyendo su línea${emotionHint}...`,
     );
     setIsSpeaking(true);
     setIsListening(false);
@@ -639,7 +675,9 @@ function Ensayo() {
         if (cancelled) return;
         setIsSpeaking(false);
         setConnectionStatus(
-          error instanceof Error ? error.message : "No se pudo hablar la linea de IA.",
+          error instanceof Error
+            ? error.message
+            : "No se pudo leer la línea con la voz del navegador.",
         );
       });
 
@@ -675,14 +713,15 @@ function Ensayo() {
       if (typeof window !== "undefined") {
         window.speechSynthesis.getVoices();
       }
+      lineNotesRef.current = [];
       setIsRehearsing(true);
-      setConnectionStatus("Lectura iniciada. Se leen todas las lineas en voz alta.");
-      toast.success("Modo lectura: sin microfono para avanzar.");
+      setConnectionStatus("Lectura iniciada. Se leen todas las líneas en voz alta.");
+      sessionSuccess("Modo lectura: sin micrófono para avanzar.");
       return;
     }
 
     if (!speechOk) {
-      toast.error("Usa Chrome o Edge en http://localhost para voz y microfono.");
+      toast.error(speechBrowserHint());
     }
 
     if (isRehearsing && isMyTurn) {
@@ -703,13 +742,16 @@ function Ensayo() {
     if (typeof window !== "undefined") {
       window.speechSynthesis.getVoices();
     }
+    lineNotesRef.current = [];
     setIsRehearsing(true);
-    setConnectionStatus("Ensayo con IA iniciado.");
-    toast.success("Ensayo iniciado. La IA interpretara los otros personajes.");
+    setConnectionStatus("Ensayo iniciado. Los demás papeles se leen con la voz del navegador.");
+    sessionSuccess("Ensayo iniciado. Los demás papeles se leen con la voz de tu navegador.");
   };
 
   const handleSkipForward = () => {
     if (activeLineIndex >= lines.length - 1) {
+      recordLineNote(currentLine, { skipped: isMyTurn && !isLecturaMode });
+      if (isMyTurn && !isLecturaMode) skippedRef.current += 1;
       void finishRehearsal("done");
       return;
     }
@@ -732,6 +774,7 @@ function Ensayo() {
     scoresRef.current = [];
     skippedRef.current = 0;
     repeatedRef.current = 0;
+    lineNotesRef.current = [];
     failedLineIdRef.current = null;
     setActiveLineIndex(0);
     setTranscript("");
@@ -739,7 +782,7 @@ function Ensayo() {
     setLastScore(null);
     setIsRehearsing(false);
     setIsSpeaking(false);
-    setConnectionStatus("Escena reiniciada. Pulsa el microfono para volver a empezar.");
+    setConnectionStatus("Escena reiniciada. Pulsa el micrófono para volver a empezar.");
   };
 
   const submitTypedLine = () => {
@@ -761,8 +804,8 @@ function Ensayo() {
 
       {!speechOk && !isLecturaMode && (
         <div className="bg-card border border-primary/40 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
-          Para que la IA te escuche y hable, abre la app en Chrome o Edge. Puedes avanzar lineas a
-          mano si el reconocimiento no esta disponible.
+          Para voz y micrófono, usa Chrome o Edge en una conexión segura (HTTPS). Puedes avanzar
+          líneas a mano si el reconocimiento no está disponible.
         </div>
       )}
 
@@ -812,19 +855,19 @@ function Ensayo() {
       <div className="grid lg:grid-cols-[1fr_300px] gap-5">
         <div className="space-y-4">
           <LineCard
-            title="Linea actual"
+            title="Línea actual"
             line={currentLine}
             selectedCharacterId={selectedCharacterId}
             active
             speaking={isSpeaking && !isMyTurn}
           />
           <LineCard
-            title="Siguiente linea"
+            title="Siguiente línea"
             line={nextLine}
             selectedCharacterId={selectedCharacterId}
           />
           <LineCard
-            title="Despues"
+            title="Después"
             line={afterLine}
             selectedCharacterId={selectedCharacterId}
             faded
@@ -837,7 +880,7 @@ function Ensayo() {
                   className={`w-1.5 h-1.5 rounded-full ${isListening || isSpeaking ? "bg-destructive animate-pulse" : "bg-success"}`}
                 />{" "}
                 {isSpeaking
-                  ? "IA hablando"
+                  ? "Voz del navegador"
                   : isListening
                     ? "Escuchando"
                     : isRehearsing
@@ -860,12 +903,12 @@ function Ensayo() {
                   }}
                   className="mt-2 text-xs text-primary hover:underline"
                 >
-                  Reproducir ultima toma
+                  Reproducir última toma
                 </button>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <ControlBtn icon={SkipBack} label="Retroceder linea" onClick={handleSkipBackward} />
+              <ControlBtn icon={SkipBack} label="Retroceder línea" onClick={handleSkipBackward} />
               <button
                 onClick={handleToggleRecording}
                 aria-label={
@@ -875,7 +918,7 @@ function Ensayo() {
                       : "Iniciar lectura"
                     : isRehearsing
                       ? "Detener ensayo"
-                      : "Iniciar ensayo con microfono"
+                      : "Iniciar ensayo con micrófono"
                 }
                 className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 transition-all ${
                   isRehearsing
@@ -891,13 +934,13 @@ function Ensayo() {
                   <Mic className="w-6 h-6" />
                 )}
               </button>
-              <ControlBtn icon={SkipForward} label="Siguiente linea" onClick={handleSkipForward} />
+              <ControlBtn icon={SkipForward} label="Siguiente línea" onClick={handleSkipForward} />
               <ControlBtn icon={RotateCcw} label="Reiniciar" onClick={handleReset} />
             </div>
             {!isLecturaMode && (
               <div className="w-full">
                 <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-                  Microfono o escribe tu linea
+                  Micrófono o escribe tu línea
                 </label>
                 <div className="mt-1 flex gap-2">
                   <input
@@ -912,10 +955,10 @@ function Ensayo() {
                     }}
                     placeholder={
                       isRehearsing && isMyTurn
-                        ? "Di la linea o escribela aqui y pulsa Enter"
+                        ? "Di la línea o escríbela aquí y pulsa Enter"
                         : isRehearsing
-                          ? "Espera a tu turno o usa siguiente linea"
-                          : "Pulsa el microfono para empezar"
+                          ? "Espera a tu turno o usa siguiente línea"
+                          : "Pulsa el micrófono para empezar"
                     }
                     className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
                   />
@@ -940,7 +983,7 @@ function Ensayo() {
                 <CharRow
                   key={character.id}
                   icon={character.id === selectedCharacter?.id ? Crown : Drama}
-                  name={`${character.name}${character.id === selectedCharacter?.id ? " (Tu)" : " (IA)"}`}
+                  name={`${character.name}${character.id === selectedCharacter?.id ? " (Tú)" : " (voz)"}`}
                   status={character.id === currentLine?.character_id ? "Activo" : "En espera"}
                   muted={character.id === selectedCharacter?.id}
                   playing={isRehearsing && character.id === currentLine?.character_id}
@@ -949,14 +992,16 @@ function Ensayo() {
             </div>
           </Card>
 
-          <Card title="IA en vivo">
+          <Card title="Voz y micrófono">
             <Quick
               label="Motor de voz"
               value={speechOk || isLecturaMode ? "Navegador" : "No disponible"}
             />
             <Quick
               label="Turno actual"
-              value={isLecturaMode ? "Lectura TTS" : isMyTurn ? "Tu turno" : "IA habla"}
+              value={
+                isLecturaMode ? "Lectura en voz alta" : isMyTurn ? "Tu turno" : "Voz del navegador"
+              }
             />
             <Quick
               label="Coincidencia"
@@ -968,15 +1013,42 @@ function Ensayo() {
               </div>
               <p className="text-xs leading-relaxed text-foreground min-h-10">
                 {isLecturaMode
-                  ? "Modo lectura: se reproducen todas las lineas con la voz del navegador."
+                  ? "Modo lectura: se reproducen todas las líneas con la voz del navegador."
                   : isSpeaking
-                    ? "La IA esta diciendo su linea. Cuando termine, te toca a ti."
+                    ? "Se está leyendo la línea del otro personaje. Cuando termine, te toca a ti."
                     : isListening
-                      ? "Habla tu linea. La IA avanza cuando reconoce las palabras clave, aunque no sea literal."
-                      : "Pulsa el microfono para que la IA interprete los otros papeles contigo."}
+                      ? "Habla tu línea. El ensayo avanza cuando reconoce las palabras clave, aunque no sea literal."
+                      : "Pulsa el micrófono para ensayar: los otros papeles se leen con la voz de tu navegador."}
               </p>
             </div>
           </Card>
+
+          {Object.keys(groupAudioUrls).length > 0 && (
+            <Card title="Tomas guardadas">
+              <div className="space-y-2">
+                {lines
+                  .filter((line) => groupAudioUrls[line.id])
+                  .map((line) => (
+                    <button
+                      key={line.id}
+                      type="button"
+                      onClick={() => {
+                        const url = groupAudioUrls[line.id];
+                        if (!url) return;
+                        const audio = new Audio(url);
+                        void audio.play();
+                      }}
+                      className="w-full text-left text-xs rounded-lg border border-border/50 bg-surface px-3 py-2 hover:border-primary/40"
+                    >
+                      <span className="text-muted-foreground">
+                        {line.character?.name ?? "Actor"}
+                      </span>
+                      <span className="block truncate text-foreground">{line.text}</span>
+                    </button>
+                  ))}
+              </div>
+            </Card>
+          )}
 
           <Card title="Progreso de la escena">
             <div className="flex justify-between text-xs mb-2">
@@ -1033,7 +1105,7 @@ function LineCard({
           <>
             <div className="flex items-center gap-2 mb-2">
               <span className={`text-sm font-semibold ${tone}`}>
-                {line.character?.name.toUpperCase() ?? "NARRADOR"} {isUserLine ? "(Tu)" : "(IA)"}
+                {line.character?.name.toUpperCase() ?? "NARRADOR"} {isUserLine ? "(Tú)" : "(voz)"}
               </span>
               <Wave active={Boolean(active && speaking)} />
               {!active && (
@@ -1047,7 +1119,7 @@ function LineCard({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No hay linea registrada para esta posicion.
+            No hay línea registrada para esta posición.
           </p>
         )}
       </div>
@@ -1130,7 +1202,7 @@ function Quick({ label, value }: { label: string; value: string }) {
 }
 
 function difficultyLabel(value: number) {
-  if (value < 33) return "Facil";
+  if (value < 33) return "Fácil";
   if (value < 66) return "Media";
   return "Alta";
 }

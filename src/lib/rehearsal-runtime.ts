@@ -41,6 +41,15 @@ export type ActiveRehearsal = {
   useProfileVoiceForAll?: boolean;
 };
 
+export type RehearsalLineNote = {
+  lineId: string;
+  order: number;
+  characterName: string;
+  text: string;
+  skipped: boolean;
+  score: number | null;
+};
+
 export type LocalRehearsalReport = {
   scriptTitle: string;
   sceneTitle: string;
@@ -62,6 +71,7 @@ export type LocalRehearsalReport = {
   score: number;
   feedback: string;
   feedbackSource?: string;
+  lineNotes?: RehearsalLineNote[];
 };
 
 export type ReportContext = {

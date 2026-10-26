@@ -9,7 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TerminosRouteImport } from './routes/terminos'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as PrivacidadRouteImport } from './routes/privacidad'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LibretosRouteImport } from './routes/libretos'
 import { Route as GruposRouteImport } from './routes/grupos'
@@ -22,9 +24,19 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as GruposIndexRouteImport } from './routes/grupos.index'
 import { Route as GruposGrupoIdRouteImport } from './routes/grupos.$grupoId'
 
+const TerminosRoute = TerminosRouteImport.update({
+  id: '/terminos',
+  path: '/terminos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadRoute = PrivacidadRouteImport.update({
+  id: '/privacidad',
+  path: '/privacidad',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -93,7 +105,9 @@ export interface FileRoutesByFullPath {
   '/grupos': typeof GruposRouteWithChildren
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
+  '/terminos': typeof TerminosRoute
   '/grupos/$grupoId': typeof GruposGrupoIdRoute
   '/grupos/': typeof GruposIndexRoute
 }
@@ -106,7 +120,9 @@ export interface FileRoutesByTo {
   '/finalizado': typeof FinalizadoRoute
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
+  '/terminos': typeof TerminosRoute
   '/grupos/$grupoId': typeof GruposGrupoIdRoute
   '/grupos': typeof GruposIndexRoute
 }
@@ -121,7 +137,9 @@ export interface FileRoutesById {
   '/grupos': typeof GruposRouteWithChildren
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
+  '/terminos': typeof TerminosRoute
   '/grupos/$grupoId': typeof GruposGrupoIdRoute
   '/grupos/': typeof GruposIndexRoute
 }
@@ -137,7 +155,9 @@ export interface FileRouteTypes {
     | '/grupos'
     | '/libretos'
     | '/login'
+    | '/privacidad'
     | '/register'
+    | '/terminos'
     | '/grupos/$grupoId'
     | '/grupos/'
   fileRoutesByTo: FileRoutesByTo
@@ -150,7 +170,9 @@ export interface FileRouteTypes {
     | '/finalizado'
     | '/libretos'
     | '/login'
+    | '/privacidad'
     | '/register'
+    | '/terminos'
     | '/grupos/$grupoId'
     | '/grupos'
   id:
@@ -164,7 +186,9 @@ export interface FileRouteTypes {
     | '/grupos'
     | '/libretos'
     | '/login'
+    | '/privacidad'
     | '/register'
+    | '/terminos'
     | '/grupos/$grupoId'
     | '/grupos/'
   fileRoutesById: FileRoutesById
@@ -179,16 +203,32 @@ export interface RootRouteChildren {
   GruposRoute: typeof GruposRouteWithChildren
   LibretosRoute: typeof LibretosRoute
   LoginRoute: typeof LoginRoute
+  PrivacidadRoute: typeof PrivacidadRoute
   RegisterRoute: typeof RegisterRoute
+  TerminosRoute: typeof TerminosRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terminos': {
+      id: '/terminos'
+      path: '/terminos'
+      fullPath: '/terminos'
+      preLoaderRoute: typeof TerminosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidad': {
+      id: '/privacidad'
+      path: '/privacidad'
+      fullPath: '/privacidad'
+      preLoaderRoute: typeof PrivacidadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -294,7 +334,9 @@ const rootRouteChildren: RootRouteChildren = {
   GruposRoute: GruposRouteWithChildren,
   LibretosRoute: LibretosRoute,
   LoginRoute: LoginRoute,
+  PrivacidadRoute: PrivacidadRoute,
   RegisterRoute: RegisterRoute,
+  TerminosRoute: TerminosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

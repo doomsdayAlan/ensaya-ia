@@ -27,3 +27,14 @@ export function isCharacterCue(line: string) {
   if (/[.!?¿¡]/.test(cleaned)) return false;
   return cleaned === cleaned.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/i.test(cleaned);
 }
+
+/** "Julieta:" o "Julieta: texto" en el editor de dialogo (no solo MAYUSCULAS). */
+export function splitNamedCue(line: string): { name: string; rest: string } | null {
+  const match = line.trim().match(/^([^:]{1,40}):\s*(.*)$/);
+  if (!match) return null;
+  const name = cleanCharacterName(match[1]);
+  if (!name || name.length < 2 || name.length > 40) return null;
+  if (isSceneHeaderLine(name)) return null;
+  if (/[.!?¿¡]/.test(name) || /^\d+$/.test(name)) return null;
+  return { name, rest: match[2].trim() };
+}

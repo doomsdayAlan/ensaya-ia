@@ -58,6 +58,7 @@ function Finalizado() {
         : undefined),
   });
   const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
+  const [reviewPanel, setReviewPanel] = useState<"errors" | "detail" | null>(null);
   useEffect(() => {
     if (historyId) {
       setLocalReport(loadReportFromHistoryId(historyId) ?? loadLocalReport());
@@ -125,6 +126,10 @@ function Finalizado() {
     Array.isArray((report as { highlights?: unknown }).highlights)
       ? (report as { highlights: { id: string; event_time: string; note: string }[] }).highlights
       : [];
+  const lineNotes = localReport?.lineNotes ?? [];
+  const errorNotes = lineNotes.filter(
+    (note) => note.skipped || (typeof note.score === "number" && note.score < 0.7),
+  );
 
   return (
     <AppShell>
@@ -149,8 +154,8 @@ function Finalizado() {
             </h1>
             <p className="text-muted-foreground">
               {localReport || report
-                ? "Reporte del ensayo con IA (voz del navegador)."
-                : "No hay una sesion registrada todavia."}
+                ? "Reporte del ensayo (voz del navegador y notas opcionales)."
+                : "No hay una sesión registrada todavía."}
             </p>
           </div>
           <Drama className="w-32 h-32 text-primary/70" strokeWidth={0.8} />
@@ -159,7 +164,7 @@ function Finalizado() {
 
       <div className="grid lg:grid-cols-2 gap-5 mb-5">
         <div className="bg-card border border-border/60 rounded-xl p-5">
-          <h3 className="font-medium mb-4">Resumen de la sesion</h3>
+          <h3 className="font-medium mb-4">Resumen de la sesión</h3>
           <dl className="space-y-3 text-sm">
             <Row icon={BookOpen} k="Obra" v={scriptTitle} />
             <Row
@@ -259,16 +264,16 @@ function Finalizado() {
           <div className="flex justify-between text-xs mb-2">
             <span className="text-muted-foreground">Completado</span>
             <span>
-              {completed} / {total} lineas
+              {completed} / {total} líneas
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-surface mb-5 overflow-hidden">
             <div className="h-full bg-primary-gradient" style={{ width: `${completedPercent}%` }} />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Stat icon={Check} value={`${completed}`} label="Lineas acertadas" tone="success" />
-            <Stat icon={RotateCcw} value={`${repeated}`} label="Lineas repetidas" tone="primary" />
-            <Stat icon={X} value={`${skipped}`} label="Lineas omitidas" tone="destructive" />
+            <Stat icon={Check} value={`${completed}`} label="Líneas acertadas" tone="success" />
+            <Stat icon={RotateCcw} value={`${repeated}`} label="Líneas repetidas" tone="primary" />
+            <Stat icon={X} value={`${skipped}`} label="Líneas omitidas" tone="destructive" />
           </div>
         </div>
 
@@ -295,13 +300,13 @@ function Finalizado() {
             <Next
               icon={FileEdit}
               title="Revisar mis errores"
-              sub="Ve las lineas que puedes mejorar"
-              onClick={() => nav({ to: "/ensayo" })}
+              sub="Ve las líneas que puedes mejorar"
+              onClick={() => setReviewPanel((current) => (current === "errors" ? null : "errors"))}
             />
             <Next
               icon={Repeat}
               title="Repetir esta escena"
-              sub="Practica nuevamente desde aqui"
+              sub="Practica nuevamente desde aquí"
               onClick={() => nav({ to: "/ensayo" })}
             />
             <Next
@@ -314,9 +319,77 @@ function Finalizado() {
         </div>
       </div>
 
+      {reviewPanel && (
+        <div className="bg-card border border-border/60 rounded-xl p-5 mb-6">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-medium">
+                {reviewPanel === "errors" ? "Líneas a mejorar" : "Reporte detallado"}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                {reviewPanel === "errors"
+                  ? "Omitidas o con coincidencia menor al 70%."
+                  : `${scriptTitle} · ${sceneTitle} · ${characterName ?? "Actor"}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReviewPanel(null)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Cerrar
+            </button>
+          </div>
+          {reviewPanel === "detail" && (
+            <div className="grid sm:grid-cols-5 gap-2 mb-4">
+              {scores.map((item) => (
+                <div key={item.label} className="rounded-lg border border-border/50 bg-surface p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {item.label}
+                  </div>
+                  <div className="text-lg font-medium mt-1">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {(reviewPanel === "errors" ? errorNotes : lineNotes).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {reviewPanel === "errors"
+                ? lineNotes.length
+                  ? "No hay líneas omitidas ni con baja coincidencia en este ensayo."
+                  : "Termina un ensayo nuevo para ver las líneas que puedes mejorar."
+                : "No hay detalle por línea en este reporte. Vuelve a ensayar para generar el desglose."}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {(reviewPanel === "errors" ? errorNotes : lineNotes).map((note) => (
+                <div
+                  key={`${note.lineId}-${note.order}`}
+                  className="rounded-lg border border-border/50 bg-surface p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground mb-1">
+                    <span>
+                      {note.order}. {note.characterName}
+                    </span>
+                    <span>
+                      {note.skipped
+                        ? "Omitida"
+                        : note.score === null
+                          ? "Sin puntaje"
+                          : `${Math.round(note.score * 100)}%`}
+                    </span>
+                  </div>
+                  <p className="text-foreground/90">{note.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border/60 rounded-xl p-4">
         <button
-          onClick={() => toast.success("Este es el reporte completo de tu ultima sesion.")}
+          onClick={() => setReviewPanel((current) => (current === "detail" ? null : "detail"))}
           className="inline-flex items-center gap-2 text-sm border border-border bg-surface rounded-lg px-4 py-2 hover:border-primary/40"
         >
           <BarChart3 className="w-4 h-4" /> Ver reporte detallado
@@ -348,7 +421,7 @@ function Finalizado() {
             to="/"
             className="inline-flex items-center gap-2 text-sm bg-primary-gradient text-primary-foreground rounded-lg px-5 py-2 font-medium shadow-glow"
           >
-            <Check className="w-4 h-4" /> Finalizar sesion
+            <Check className="w-4 h-4" /> Finalizar sesión
           </Link>
         </div>
       </div>

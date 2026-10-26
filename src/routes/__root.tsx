@@ -17,16 +17,16 @@ function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Página no encontrada</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          Esta dirección no existe o se movió. Vuelve al inicio para continuar.
         </p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            Ir al inicio
           </Link>
         </div>
       </div>
@@ -42,10 +42,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          Esta página no cargó
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          Hubo un problema al mostrar el contenido. Puedes reintentar o volver al inicio.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -55,13 +55,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            Reintentar
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Ir al inicio
           </a>
         </div>
       </div>
@@ -74,29 +74,29 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
+      { title: `${APP_NAME} — Ensayo teatral con voz del navegador` },
       {
         name: "description",
         content:
-          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+          "Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de tu navegador.",
       },
       { name: "author", content: APP_NAME },
-      { property: "og:title", content: `${APP_NAME} — Ensayo teatral con inteligencia artificial` },
+      { property: "og:title", content: `${APP_NAME} — Ensayo teatral con voz del navegador` },
       {
         property: "og:description",
         content:
-          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+          "Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de tu navegador.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:title",
-        content: `${APP_NAME} — Ensayo teatral con inteligencia artificial`,
+        content: `${APP_NAME} — Ensayo teatral con voz del navegador`,
       },
       {
         name: "twitter:description",
         content:
-          "Practica escenas, interpreta personajes y deja que la IA complete los demás papeles.",
+          "Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de tu navegador.",
       },
       {
         property: "og:image",

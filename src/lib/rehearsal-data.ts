@@ -7,17 +7,21 @@ import {
   saveLocalProfile,
 } from "@/lib/local-auth";
 import {
+  addLocalCharacter,
+  applyPrivacyToOwnedScripts,
+  createBlankLocalScript,
   getLocalScriptDetails,
   getLocalScriptSetup,
   listLocalScripts,
   patchLocalScript,
   removeLocalScript,
+  rewriteLocalScriptDialogue,
   saveImportedLocalScript,
   duplicateLocalSetup,
 } from "@/lib/local-library";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { withTimeout } from "@/lib/browser";
-import { cleanCharacterName, isCharacterCue } from "@/lib/script-text";
+import { cleanCharacterName, isCharacterCue, splitNamedCue } from "@/lib/script-text";
 
 function isSupabaseConfigured() {
   const url =
@@ -166,7 +170,7 @@ export async function getPerfilUsuario() {
 
 export async function updatePerfilUsuario(patch: TablesUpdate<"perfil_usuario">) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para guardar tu perfil.");
+  if (!user) throw new Error("Inicia sesión para guardar tu perfil.");
 
   const current = loadLocalProfile(user.id);
   const saved = saveLocalProfile({
@@ -354,12 +358,12 @@ export async function getScriptDetails(scriptId: string): Promise<ScriptDetails>
 
 export async function importScriptFromText(draft: ScriptImportDraft) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para importar libretos.");
+  if (!user) throw new Error("Inicia sesión para importar libretos.");
 
   const parsedLines = parseImportedScriptLines(draft.rawText);
   if (parsedLines.length === 0) {
     throw new Error(
-      "No se encontraron lineas de dialogo para importar. Verifica el formato del texto.",
+      "No se encontraron líneas de diálogo para importar. Verifica el formato del texto.",
     );
   }
 
@@ -439,9 +443,33 @@ export async function importScriptFromText(draft: ScriptImportDraft) {
   }
 }
 
+export async function createBlankScript(title = "Nuevo libreto") {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Inicia sesión para crear libretos.");
+  return createBlankLocalScript(user.id, title);
+}
+
+export async function updateScriptDialogue(scriptId: string, rawText: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Inicia sesión para editar el diálogo.");
+  return rewriteLocalScriptDialogue(scriptId, user.id, rawText);
+}
+
+export async function addCharacterToScript(scriptId: string, name: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Inicia sesión para agregar personajes.");
+  return addLocalCharacter(scriptId, user.id, name);
+}
+
+export async function applyPrivacyToMyScripts(privacy: string) {
+  const user = await getCurrentUser();
+  if (!user) return 0;
+  return applyPrivacyToOwnedScripts(user.id, privacy);
+}
+
 export async function updateScript(scriptId: string, patch: TablesUpdate<"scripts">) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para editar libretos.");
+  if (!user) throw new Error("Inicia sesión para editar libretos.");
 
   if (isLocalUserId(user.id) || scriptId.startsWith("local-")) {
     return patchLocalScript(scriptId, user.id, patch);
@@ -465,7 +493,7 @@ export async function toggleScriptFavorite(script: ScriptRecord) {
 
 export async function setActiveScript(script: ScriptRecord) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para activar libretos.");
+  if (!user) throw new Error("Inicia sesión para activar libretos.");
   if (script.user_id !== user.id) throw new Error("Solo puedes activar tus libretos importados.");
 
   if (isLocalUserId(user.id) || script.id.startsWith("local-")) {
@@ -496,7 +524,7 @@ export async function restoreScript(script: ScriptRecord) {
 
 export async function deleteScriptPermanently(script: ScriptRecord) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para eliminar libretos.");
+  if (!user) throw new Error("Inicia sesión para eliminar libretos.");
 
   if (isLocalUserId(user.id) || script.id.startsWith("local-")) {
     removeLocalScript(script.id, user.id);
@@ -514,7 +542,7 @@ export async function deleteScriptPermanently(script: ScriptRecord) {
 
 export async function duplicateScript(scriptId: string) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para duplicar libretos.");
+  if (!user) throw new Error("Inicia sesión para duplicar libretos.");
 
   const localSetup = getLocalScriptSetup(scriptId);
   if (
@@ -689,6 +717,13 @@ function parseImportedScriptLines(rawText: string): ImportedScriptLine[] {
       currentCharacter = cleanCharacterName(line);
       continue;
     }
+    const named = splitNamedCue(line);
+    if (named) {
+      flush();
+      currentCharacter = named.name;
+      if (named.rest) buffer.push(named.rest);
+      continue;
+    }
 
     buffer.push(line);
   }
@@ -715,7 +750,7 @@ export async function createRehearsalSession(draft: RehearsalDraft) {
     throw new Error("Supabase no esta configurado; el ensayo corre en local.");
   }
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para sincronizar tu ensayo.");
+  if (!user) throw new Error("Inicia sesión para sincronizar tu ensayo.");
 
   const insert: TablesInsert<"rehearsal_sessions"> = {
     user_id: user.id,
@@ -746,7 +781,7 @@ export async function updateRehearsalSession(
 ) {
   if (!isSupabaseConfigured()) return null;
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para sincronizar tu ensayo.");
+  if (!user) throw new Error("Inicia sesión para sincronizar tu ensayo.");
 
   const { data, error } = await supabase
     .from("rehearsal_sessions")
@@ -764,7 +799,7 @@ export async function createTeleprompterRecording(
   recording: Omit<TablesInsert<"teleprompter_recordings">, "user_id">,
 ) {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Inicia sesion para guardar la grabacion.");
+  if (!user) throw new Error("Inicia sesión para guardar la grabación.");
 
   const { data, error } = await supabase
     .from("teleprompter_recordings")
