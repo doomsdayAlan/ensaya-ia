@@ -38,24 +38,53 @@ export type StoredProfile = {
 };
 
 const DB_NAME = "ensaya-ia-db";
-const DB_VERSION = 1;
+/** v2: repara bases v1 creadas vacías (sin object stores) por un open() de comprobación. */
+const DB_VERSION = 2;
+
+function ensureAccountStores(db: IDBDatabase) {
+  if (!db.objectStoreNames.contains("users")) {
+    const users = db.createObjectStore("users", { keyPath: "id" });
+    users.createIndex("email", "email", { unique: true });
+  }
+  if (!db.objectStoreNames.contains("perfil_usuario")) {
+    db.createObjectStore("perfil_usuario", { keyPath: "user_id" });
+  }
+}
+
+function openVersionedDb(version: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (version > DB_VERSION + 8) {
+      reject(new Error("No se pudieron crear las tablas de cuentas."));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, version);
+    request.onupgradeneeded = () => ensureAccountStores(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (
+        db.objectStoreNames.contains("users") &&
+        db.objectStoreNames.contains("perfil_usuario")
+      ) {
+        resolve(db);
+        return;
+      }
+      const nextVersion = db.version + 1;
+      db.close();
+      void openVersionedDb(nextVersion).then(resolve, reject);
+    };
+    request.onerror = () =>
+      reject(request.error ?? new Error("No se pudo abrir la base de datos."));
+  });
+}
 
 async function copyLegacyDbIfNeeded() {
   if (typeof indexedDB === "undefined") return;
-  const exists = await new Promise<boolean>((resolve) => {
-    const check = indexedDB.open(DB_NAME);
-    check.onsuccess = () => {
-      const db = check.result;
-      const hasStores = db.objectStoreNames.contains("users");
-      db.close();
-      resolve(hasStores);
-    };
-    check.onerror = () => resolve(false);
-  });
-  if (exists) return;
 
   await new Promise<void>((resolve) => {
     const legacy = indexedDB.open(LEGACY_STORAGE.idbName);
+    legacy.onupgradeneeded = () => {
+      legacy.transaction?.abort();
+    };
     legacy.onerror = () => resolve();
     legacy.onsuccess = async () => {
       const oldDb = legacy.result;
@@ -81,34 +110,34 @@ async function copyLegacyDbIfNeeded() {
             })
           : [];
         oldDb.close();
-        const next = indexedDB.open(DB_NAME, DB_VERSION);
-        next.onupgradeneeded = () => {
-          const db = next.result;
-          if (!db.objectStoreNames.contains("users")) {
-            const store = db.createObjectStore("users", { keyPath: "id" });
-            store.createIndex("email", "email", { unique: true });
-          }
-          if (!db.objectStoreNames.contains("perfil_usuario")) {
-            db.createObjectStore("perfil_usuario", { keyPath: "user_id" });
-          }
+        if (users.length === 0) {
+          resolve();
+          return;
+        }
+        const db = await openVersionedDb(DB_VERSION);
+        const existing = await new Promise<number>((res, rej) => {
+          const req = db.transaction("users", "readonly").objectStore("users").count();
+          req.onsuccess = () => res(req.result);
+          req.onerror = () => rej(req.error);
+        });
+        if (existing > 0) {
+          db.close();
+          resolve();
+          return;
+        }
+        const tx = db.transaction(["users", "perfil_usuario"], "readwrite");
+        const userStore = tx.objectStore("users");
+        const profileStore = tx.objectStore("perfil_usuario");
+        for (const user of users) userStore.put(user);
+        for (const profile of profiles) profileStore.put(profile);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
         };
-        next.onsuccess = () => {
-          const db = next.result;
-          const tx = db.transaction(["users", "perfil_usuario"], "readwrite");
-          const userStore = tx.objectStore("users");
-          const profileStore = tx.objectStore("perfil_usuario");
-          for (const user of users) userStore.put(user);
-          for (const profile of profiles) profileStore.put(profile);
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            db.close();
-            resolve();
-          };
+        tx.onerror = () => {
+          db.close();
+          resolve();
         };
-        next.onerror = () => resolve();
       } catch {
         oldDb.close();
         resolve();
@@ -124,20 +153,7 @@ function openDb(): Promise<IDBDatabase> {
       return;
     }
     void copyLegacyDbIfNeeded().finally(() => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains("users")) {
-          const users = db.createObjectStore("users", { keyPath: "id" });
-          users.createIndex("email", "email", { unique: true });
-        }
-        if (!db.objectStoreNames.contains("perfil_usuario")) {
-          db.createObjectStore("perfil_usuario", { keyPath: "user_id" });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () =>
-        reject(request.error ?? new Error("No se pudo abrir la base de datos."));
+      void openVersionedDb(DB_VERSION).then(resolve, reject);
     });
   });
 }
