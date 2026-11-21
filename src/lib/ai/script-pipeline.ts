@@ -23,6 +23,7 @@ import {
   type CastAssignmentResult,
 } from "./actor-assignment";
 import { checkTinyLLMHardware, type HardwareStatus } from "./tiny-character-detector";
+import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import type {
   CharacterRecord,
   SceneRecord,
@@ -302,12 +303,14 @@ export async function executeScriptPipeline(
     deleted_at: null,
   };
 
+  const consolidatedLines = consolidateScriptLines(lines);
+
   const setup: ScriptSetup = {
     script,
     scenes,
     scene: scenes[0] ?? null,
     characters,
-    lines,
+    lines: consolidatedLines,
   };
 
   onProgress?.({
@@ -323,7 +326,7 @@ export async function executeScriptPipeline(
       actsCount,
       scenesCount: scenes.length,
       charactersCount: characters.length,
-      linesCount: lines.length,
+      linesCount: consolidatedLines.length,
       charactersPerScene,
       hardware,
       usedTinyLLM,

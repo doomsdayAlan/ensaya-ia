@@ -39,6 +39,7 @@ bun.lockb
 *.sw?
 
 # Python / TinyLLM
+venv/
 src/teleprompter/venv/
 src/teleprompter/**/*.db
 src/teleprompter/*.db

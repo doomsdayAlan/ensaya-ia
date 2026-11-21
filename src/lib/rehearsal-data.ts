@@ -18,17 +18,43 @@ import {
   rewriteLocalScriptDialogue,
   saveImportedLocalScript,
   saveLocalScriptSetup,
+  savePipelineScriptSetup,
   duplicateLocalSetup,
   type ImportedSceneGroup,
 } from "@/lib/local-library";
 
-export { saveLocalScriptSetup };
+export { saveLocalScriptSetup, savePipelineScriptSetup };
 import { requestScriptSegment } from "@/lib/ai/request-script-segment";
 import type { ScriptSegmentResult } from "@/lib/ai/types";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { withTimeout } from "@/lib/browser";
-import { cleanCharacterName, isCharacterCue, splitNamedCue } from "@/lib/script-text";
+import {
+  cleanCharacterName,
+  isCharacterCue,
+  isSceneHeaderLine,
+  splitNamedCue,
+  parseScriptText,
+  parseScriptTextWithTinyLLM,
+  parsedDraftToSceneGroups,
+  type ParsedScriptDraft,
+  type ParsedScriptScene,
+  type ParsedScriptLine,
+} from "@/lib/script-text";
+
+export {
+  consolidateScriptLines,
+  cleanCharacterName,
+  isCharacterCue,
+  isSceneHeaderLine,
+  splitNamedCue,
+  parseScriptText,
+  parseScriptTextWithTinyLLM,
+  parsedDraftToSceneGroups,
+  type ParsedScriptDraft,
+  type ParsedScriptScene,
+  type ParsedScriptLine,
+};
 
 function isSupabaseConfigured() {
   const url =
@@ -497,7 +523,22 @@ export async function importScriptFromText(
   if (!user) throw new Error("Inicia sesión para importar libretos.");
 
   const useAiSegment = options.useAiSegment === true;
-  const segmentedGroups = useAiSegment ? await segmentImportedScript(draft) : null;
+  let segmentedGroups = useAiSegment ? await segmentImportedScript(draft) : null;
+
+  if (!segmentedGroups || segmentedGroups.length === 0) {
+    try {
+      const parsedDraft = await parseScriptTextWithTinyLLM(draft.rawText, draft.title);
+      if (parsedDraft.scenes.length > 0 && parsedDraft.scenes.some((s) => s.lines.length > 0)) {
+        segmentedGroups = parsedDraftToSceneGroups(parsedDraft);
+      }
+    } catch {
+      const parsedDraft = parseScriptText(draft.rawText, draft.title);
+      if (parsedDraft.scenes.length > 0 && parsedDraft.scenes.some((s) => s.lines.length > 0)) {
+        segmentedGroups = parsedDraftToSceneGroups(parsedDraft);
+      }
+    }
+  }
+
   const parsedLines = segmentedGroups
     ? segmentedGroups.flatMap((group) => group.lines)
     : parseImportedScriptLines(draft.rawText);

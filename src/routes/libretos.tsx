@@ -768,7 +768,7 @@ function Libretos() {
                 onClick={() => {
                   setReviewOpen(false);
                   setReviewResult(null);
-                  fallbackImport(
+                  fallbackLocalImport(
                     {
                       title: reviewTitle || "Libreto importado",
                       rawText: reviewDialogue || reviewResult.setup.script?.raw_text || "",

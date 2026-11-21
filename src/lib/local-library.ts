@@ -156,6 +156,9 @@ export function saveLocalScriptSetup(setup: ScriptSetup) {
   return script;
 }
 
+/** Alias usado por el pipeline de ingestión teatral. */
+export const savePipelineScriptSetup = saveLocalScriptSetup;
+
 export function saveImportedLocalScript(
   draft: ScriptImportDraft,
   userId: string,
@@ -322,7 +325,7 @@ export function duplicateLocalSetup(setup: ScriptSetup, userId: string) {
     scenes,
     scene: scenes[0] ?? null,
     characters,
-    lines,
+    lines: consolidateScriptLines(lines),
   };
   writeLibrary(library);
   return script;
@@ -463,7 +466,7 @@ export function rewriteLocalScriptDialogue(scriptId: string, userId: string, raw
     scenes,
     scene: scenes[0] ?? null,
     characters,
-    lines,
+    lines: consolidateScriptLines(lines),
   };
   writeLibrary(library);
   return updated;
