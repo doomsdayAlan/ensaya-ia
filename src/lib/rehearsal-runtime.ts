@@ -51,6 +51,14 @@ export type RehearsalLineNote = {
   text: string;
   skipped: boolean;
   score: number | null;
+  /** Texto dicho en un intento que no se aceptó. */
+  spoken?: string | null;
+  /** Número de intento fallido de esa línea (1, 2, …). */
+  attempt?: number | null;
+  /** Intento final que no alcanzó el umbral. */
+  failed?: boolean;
+  /** Línea del usuario que no se llegó a decir al cerrar el ensayo. */
+  unreached?: boolean;
 };
 
 export type LocalRehearsalReport = {

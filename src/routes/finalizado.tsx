@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
@@ -59,6 +59,11 @@ function Finalizado() {
   });
   const [localReport, setLocalReport] = useState<LocalRehearsalReport | null>(null);
   const [reviewPanel, setReviewPanel] = useState<"errors" | "detail" | null>(null);
+  const reviewRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!reviewPanel) return;
+    reviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [reviewPanel]);
   useEffect(() => {
     if (historyId) {
       setLocalReport(loadReportFromHistoryId(historyId) ?? loadLocalReport());
@@ -128,8 +133,13 @@ function Finalizado() {
       : [];
   const lineNotes = localReport?.lineNotes ?? [];
   const errorNotes = lineNotes.filter(
-    (note) => note.skipped || (typeof note.score === "number" && note.score < 0.7),
+    (note) =>
+      note.skipped ||
+      note.failed ||
+      note.unreached ||
+      (typeof note.score === "number" && note.score < 0.7),
   );
+  const sceneDone = total > 0 && completed >= total;
 
   return (
     <AppShell>
@@ -262,7 +272,9 @@ function Finalizado() {
         <div className="bg-card border border-border/60 rounded-xl p-5">
           <h3 className="font-medium mb-3">Progreso de la escena</h3>
           <div className="flex justify-between text-xs mb-2">
-            <span className="text-muted-foreground">Completado</span>
+            <span className="text-muted-foreground">
+              {sceneDone ? "Completado" : `Incompleto (${completed} de ${total})`}
+            </span>
             <span>
               {completed} / {total} líneas
             </span>
@@ -320,7 +332,7 @@ function Finalizado() {
       </div>
 
       {reviewPanel && (
-        <div className="bg-card border border-border/60 rounded-xl p-5 mb-6">
+        <div ref={reviewRef} className="bg-card border border-border/60 rounded-xl p-5 mb-6">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 className="font-medium">
@@ -328,7 +340,7 @@ function Finalizado() {
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
                 {reviewPanel === "errors"
-                  ? "Omitidas o con coincidencia menor al 70%."
+                  ? "Omisiones, líneas no alcanzadas, baja coincidencia e intentos fallidos."
                   : `${scriptTitle} · ${sceneTitle} · ${characterName ?? "Actor"}`}
               </p>
             </div>
@@ -372,14 +384,21 @@ function Finalizado() {
                       {note.order}. {note.characterName}
                     </span>
                     <span>
-                      {note.skipped
-                        ? "Omitida"
-                        : note.score === null
-                          ? "Sin puntaje"
-                          : `${Math.round(note.score * 100)}%`}
+                      {note.unreached
+                        ? "No alcanzada"
+                        : note.failed
+                          ? `Intento ${note.attempt ?? 1} · ${Math.round((note.score ?? 0) * 100)}%`
+                          : note.skipped
+                            ? "Omitida"
+                            : note.score === null
+                              ? "Sin puntaje"
+                              : `${Math.round(note.score * 100)}%`}
                     </span>
                   </div>
                   <p className="text-foreground/90">{note.text}</p>
+                  {note.spoken ? (
+                    <p className="text-xs text-muted-foreground mt-1">Dijiste: “{note.spoken}”</p>
+                  ) : null}
                 </div>
               ))}
             </div>

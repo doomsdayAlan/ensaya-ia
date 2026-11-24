@@ -60,25 +60,106 @@ export {
   scoreRehearsal,
 } from "@/lib/rehearsal-match";
 
+const FEMALE_NAMES = new Set([
+  "MARTA",
+  "MARIA",
+  "ANA",
+  "JULIETA",
+  "MADRE",
+  "ABUELA",
+  "SOFIA",
+  "LUCIA",
+  "CARMEN",
+  "LAURA",
+  "ELENA",
+  "ROSA",
+  "INES",
+  "PAULA",
+  "CLARA",
+  "BEATRIZ",
+  "CAPERUCITA",
+]);
+const MALE_NAMES = new Set([
+  "JUAN",
+  "PEDRO",
+  "GENARO",
+  "MATEO",
+  "DIEGO",
+  "ROMEO",
+  "PADRE",
+  "ABUELO",
+  "CARLOS",
+  "LUIS",
+  "JOSE",
+  "ALEJANDRO",
+  "LUPERCIO",
+]);
+
+/** Voz del navegador según el nombre. No usa un servicio de pago. */
+export function inferVoiceLabel(name: string) {
+  const first = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .split(/\s+/)[0];
+  if (!first) return "Valeria (Neutra)";
+  if (FEMALE_NAMES.has(first)) return "Sofia (Femenina)";
+  if (MALE_NAMES.has(first)) return "Diego (Masculino)";
+  if (first.endsWith("A")) return "Sofia (Femenina)";
+  if (first.endsWith("O")) return "Diego (Masculino)";
+  return "Valeria (Neutra)";
+}
+
+function voiceRank(voice: SpeechSynthesisVoice) {
+  const name = voice.name.toLowerCase();
+  const lang = voice.lang.toLowerCase();
+  let rank = 0;
+  if (/google/.test(name) && lang.startsWith("es")) rank += 50;
+  if (/microsoft/.test(name) && /natural|online/.test(name)) rank += 40;
+  if (/paulina|sabina|dalia|jorge/.test(name)) rank += 30;
+  if (/natural|online|premium/.test(name)) rank += 15;
+  if (lang.startsWith("es-mx")) rank += 8;
+  else if (lang.startsWith("es")) rank += 4;
+  return rank;
+}
+
 export function pickVoice(preferred?: string | null) {
   if (typeof window === "undefined") return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
 
   const spanish = voices.filter((voice) => voice.lang.toLowerCase().startsWith("es"));
-  const pool = spanish.length ? spanish : voices;
-  const hint = (preferred ?? "").toLowerCase();
+  const pool = (spanish.length ? spanish : voices)
+    .slice()
+    .sort((a, b) => voiceRank(b) - voiceRank(a));
+  const hint = (preferred ?? "").toLowerCase().trim();
+  const exact = voices.find((voice) => voice.name.toLowerCase() === hint);
+  if (exact) return exact;
   const wantFemale = hint.includes("sofia") || hint.includes("valeria") || hint.includes("femen");
   const wantMale = hint.includes("diego") || hint.includes("mascul");
 
   const gendered = pool.filter((voice) => {
     const name = voice.name.toLowerCase();
-    if (wantFemale) return /female|mujer|monica|sabina|paulina|helena|sofi/.test(name);
+    if (wantFemale) return /female|mujer|monica|sabina|paulina|helena|sofi|dalia/.test(name);
     if (wantMale) return /male|hombre|jorge|diego|pablo|carlos/.test(name);
     return true;
   });
 
   return gendered[0] ?? pool[0] ?? null;
+}
+
+/** Nombres reales de speechSynthesis, con prioridad a español natural. */
+export function listBrowserVoiceNames() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return [];
+  const voices = window.speechSynthesis.getVoices();
+  const spanish = voices
+    .filter((voice) => voice.lang.toLowerCase().startsWith("es"))
+    .slice()
+    .sort((a, b) => voiceRank(b) - voiceRank(a) || a.name.localeCompare(b.name, "es"));
+  const source = spanish.length
+    ? spanish
+    : voices.slice().sort((a, b) => voiceRank(b) - voiceRank(a));
+  return Array.from(new Set(source.map((voice) => voice.name)));
 }
 
 /** rate/pitch segun emocion base del personaje (modo "sugerir emociones"). */
@@ -122,38 +203,84 @@ export function speakLine(
     return Promise.reject(new Error("Este navegador no puede leer las líneas en voz alta."));
   }
 
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = SPEECH_LOCALE;
-  const prosody =
-    options?.applyEmotion && options.emotion
-      ? emotionProsody(options.emotion)
-      : { rate: 0.96, pitch: 1 };
-  utterance.rate = prosody.rate;
-  utterance.pitch = prosody.pitch;
-  const voice = pickVoice(preferredVoice);
-  if (voice) {
-    utterance.voice = voice;
-    utterance.lang = voice.lang;
-  }
+  const synth = window.speechSynthesis;
+  synth.cancel();
 
   return new Promise<void>((resolve, reject) => {
-    // Algunos WebViews no disparan onend; el timer evita que el ensayo se congele.
-    const fallbackMs = Math.min(14_000, 2_200 + text.length * 55);
-    const timer = window.setTimeout(() => resolve(), fallbackMs);
-    utterance.onend = () => {
+    let settled = false;
+    let started = false;
+    let retries = 0;
+    const fallbackMs = Math.min(20_000, 2_800 + text.length * 70);
+    let timer = 0;
+
+    const settle = (ok: boolean, error?: Error) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timer);
-      resolve();
+      if (ok) resolve();
+      else reject(error ?? new Error("No se pudo reproducir la línea con la voz del navegador."));
     };
-    utterance.onerror = (event) => {
+
+    const armTimeout = () => {
       window.clearTimeout(timer);
-      if (event.error === "interrupted" || event.error === "canceled") {
-        resolve();
-        return;
+      timer = window.setTimeout(() => settle(true), fallbackMs);
+    };
+
+    const speak = () => {
+      if (settled) return;
+      if (synth.paused) {
+        try {
+          synth.resume();
+        } catch {
+          // Chrome a veces deja la cola en pausa tras cancel().
+        }
       }
-      reject(new Error("No se pudo reproducir la línea con la voz del navegador."));
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = SPEECH_LOCALE;
+      const prosody =
+        options?.applyEmotion && options.emotion
+          ? emotionProsody(options.emotion)
+          : { rate: 0.92, pitch: 1.02 };
+      utterance.rate = prosody.rate;
+      utterance.pitch = prosody.pitch;
+      const voice = pickVoice(preferredVoice);
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      }
+      utterance.onstart = () => {
+        started = true;
+        armTimeout();
+      };
+      utterance.onend = () => settle(true);
+      utterance.onerror = (event) => {
+        const code = event.error;
+        if ((code === "interrupted" || code === "canceled") && !started && retries < 2) {
+          retries += 1;
+          window.setTimeout(speak, 80);
+          return;
+        }
+        if (code === "interrupted" || code === "canceled") {
+          // Si nunca empezó, no cuenta como leída. Si ya sonaba, el usuario cambió de línea.
+          if (started) settle(true);
+          else settle(false, new Error("La voz se interrumpió antes de empezar."));
+          return;
+        }
+        settle(false, new Error("No se pudo reproducir la línea con la voz del navegador."));
+      };
+      armTimeout();
+      synth.speak(utterance);
+      if (synth.paused) {
+        try {
+          synth.resume();
+        } catch {
+          // ignore
+        }
+      }
     };
-    window.speechSynthesis.speak(utterance);
+
+    // Chrome no reproduce si speak() va en el mismo tick que cancel().
+    window.setTimeout(speak, 40);
   });
 }
 
@@ -208,11 +335,17 @@ export function listenForLine(options: {
 
   recognition.onerror = (event) => {
     if (event.error === "aborted" || event.error === "no-speech") return;
-    options.onError?.(
-      event.error === "not-allowed"
-        ? "Permite el micrófono para que la app te escuche."
-        : "No se pudo escuchar el micrófono.",
-    );
+    if (event.error === "not-allowed") {
+      stopped = true;
+      try {
+        recognition.stop();
+      } catch {
+        recognition.abort();
+      }
+      options.onError?.("Permite el micrófono para que la app te escuche.");
+      return;
+    }
+    options.onError?.("No se pudo escuchar el micrófono.");
   };
 
   recognition.onend = () => {

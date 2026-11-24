@@ -72,6 +72,58 @@ function Wave({ active }: { active?: boolean }) {
   );
 }
 
+/** Nivel real del micrófono del turno (AnalyserNode), no una animación fija. */
+function MicLevelMeter({ stream }: { stream: MediaStream | null }) {
+  const [level, setLevel] = useState(0);
+
+  useEffect(() => {
+    if (!stream) {
+      setLevel(0);
+      return;
+    }
+    const context = new AudioContext();
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    let frame = 0;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 1) {
+        const sample = (data[i] - 128) / 128;
+        sum += sample * sample;
+      }
+      const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
+      setLevel(rms);
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      source.disconnect();
+      void context.close();
+    };
+  }, [stream]);
+
+  return (
+    <div className="mt-1 flex items-end gap-0.5 h-3" aria-hidden>
+      {Array.from({ length: 12 }).map((_, index) => {
+        const threshold = (index + 1) / 12;
+        const on = level >= threshold * 0.85;
+        return (
+          <span
+            key={index}
+            className={`w-1 rounded-sm ${on ? "bg-primary" : "bg-muted-foreground/25"}`}
+            style={{ height: `${30 + index * 6}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function Ensayo() {
   const nav = useNavigate();
   const listenRef = useRef<{ stop: () => void; reset: () => void } | null>(null);
@@ -97,7 +149,7 @@ function Ensayo() {
     setSessionReady(true);
   }, []);
   const [connectionStatus, setConnectionStatus] = useState(
-    "Pulsa el micrófono para comenzar el ensayo.",
+    "El botón redondo inicia o detiene el ensayo.",
   );
   const [isRehearsing, setIsRehearsing] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -106,6 +158,7 @@ function Ensayo() {
   const [transcript, setTranscript] = useState("");
   const [typedLine, setTypedLine] = useState("");
   const [lastScore, setLastScore] = useState<number | null>(null);
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
 
   const { data: latest, isLoading: rehearsalLoading } = useQuery({
     queryKey: ["latest-rehearsal-v2"],
@@ -152,16 +205,35 @@ function Ensayo() {
   const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
   const isMyTurn = Boolean(currentLine && currentLine.character_id === selectedCharacterId);
+  const turnLabel = (() => {
+    const actorType = currentLine?.character?.actor_type;
+    if (actorType === "user" || isMyTurn) return "Tú";
+    if (actorType?.startsWith("actor-")) return `Actor ${actorType.slice("actor-".length)}`;
+    return null;
+  })();
+  const isHumanTurn = Boolean(turnLabel);
   const speechOk = canUseSpeechRecognition() && canUseSpeechSynthesis();
+  const humanCharacterIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const character of setup?.characters ?? []) {
+      if (character.actor_type === "user" || character.actor_type?.startsWith("actor-")) {
+        ids.add(character.id);
+      }
+    }
+    if (selectedCharacterId) ids.add(selectedCharacterId);
+    return ids;
+  }, [setup?.characters, selectedCharacterId]);
   const userLinesTotal = useMemo(
-    () => lines.filter((line) => line.character_id === selectedCharacterId).length,
-    [lines, selectedCharacterId],
+    () =>
+      lines.filter((line) => line.character_id && humanCharacterIds.has(line.character_id)).length,
+    [lines, humanCharacterIds],
   );
 
   const stopTake = () => {
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     recorderRef.current = null;
+    setMicStream(null);
   };
 
   const stopTakeAndGetBlob = () =>
@@ -217,6 +289,7 @@ function Ensayo() {
       };
       recorder.start();
       recorderRef.current = recorder;
+      setMicStream(stream);
     } catch {
       // El reconocimiento de voz sigue funcionando aunque no se grabe el WebM.
     }
@@ -229,8 +302,10 @@ function Ensayo() {
       const finish = () => {
         if (done) return;
         done = true;
+        window.clearTimeout(timer);
         resolve();
       };
+      const timer = window.setTimeout(finish, 20_000);
       audio.onended = finish;
       audio.onerror = finish;
       void audio.play().catch(finish);
@@ -325,7 +400,14 @@ function Ensayo() {
 
   const recordLineNote = (
     line: ScriptLineWithCharacter | undefined,
-    opts?: { skipped?: boolean; score?: number },
+    opts?: {
+      skipped?: boolean;
+      score?: number;
+      spoken?: string | null;
+      attempt?: number | null;
+      failed?: boolean;
+      unreached?: boolean;
+    },
   ) => {
     if (!line) return;
     lineNotesRef.current.push({
@@ -335,6 +417,10 @@ function Ensayo() {
       text: line.text,
       skipped: Boolean(opts?.skipped),
       score: typeof opts?.score === "number" ? opts.score : null,
+      spoken: opts?.spoken ?? null,
+      attempt: opts?.attempt ?? null,
+      failed: Boolean(opts?.failed),
+      unreached: Boolean(opts?.unreached),
     });
   };
 
@@ -346,6 +432,18 @@ function Ensayo() {
 
     const skipped = skippedRef.current;
     const repeated = repeatedRef.current;
+    if (reason === "manual" && !isLecturaMode) {
+      const acceptedIds = new Set(
+        lineNotesRef.current
+          .filter((note) => !note.failed && !note.unreached && typeof note.score === "number")
+          .map((note) => note.lineId),
+      );
+      for (const line of lines) {
+        if (!line.character_id || !humanCharacterIds.has(line.character_id)) continue;
+        if (acceptedIds.has(line.id)) continue;
+        recordLineNote(line, { skipped: true, score: 0, unreached: true });
+      }
+    }
     const completedLines = Math.min(lines.length, activeLineIndex + (reason === "done" ? 1 : 0));
     const userLinesCompleted = scoresRef.current.length;
     const isLectura = mode === "lectura";
@@ -503,9 +601,11 @@ function Ensayo() {
       return prev + 1;
     });
 
+    // El candado solo evita un doble avance en el mismo instante.
+    // No debe impedir que el efecto lea la línea nueva: se suelta en el siguiente tick.
     window.setTimeout(() => {
       advancingRef.current = false;
-    }, 250);
+    }, 0);
   };
 
   const applySpokenText = (text: string, fromTyping = false) => {
@@ -526,11 +626,20 @@ function Ensayo() {
       return true;
     }
     // Solo intentos finales fallidos: el segundo fallo FINAL de la misma linea = repeticion.
+    const attempt =
+      lineNotesRef.current.filter((note) => note.lineId === currentLine.id && note.failed).length +
+      1;
     if (failedLineIdRef.current === currentLine.id) {
       repeatedRef.current += 1;
     } else {
       failedLineIdRef.current = currentLine.id;
     }
+    recordLineNote(currentLine, {
+      score: verdict.score,
+      spoken: text,
+      attempt,
+      failed: true,
+    });
     // Nuevo intento de la misma linea: limpia acumulado STT para comparar por separado.
     accumulatedFinalRef.current = "";
     listenRef.current?.reset();
@@ -543,7 +652,7 @@ function Ensayo() {
   };
 
   useEffect(() => {
-    if (!isRehearsing || !currentLine || advancingRef.current) return;
+    if (!isRehearsing || !currentLine) return;
 
     // Modo lectura: TTS de todas las lineas, sin exigir microfono para avanzar.
     if (isLecturaMode) {
@@ -583,11 +692,12 @@ function Ensayo() {
 
       return () => {
         cancelled = true;
+        setIsSpeaking(false);
         stopSpeaking();
       };
     }
 
-    if (isMyTurn) {
+    if (isHumanTurn) {
       setIsSpeaking(false);
       stopSpeaking();
       if (!canUseSpeechRecognition()) {
@@ -596,7 +706,11 @@ function Ensayo() {
         );
         return;
       }
-      setConnectionStatus("Tu turno. Di la línea en voz alta.");
+      setConnectionStatus(
+        turnLabel === "Tú"
+          ? "Tu turno. Di la línea en voz alta."
+          : `Turno de ${turnLabel}. Pasa el micrófono.`,
+      );
       stopListen();
       void startTake();
       accumulatedFinalRef.current = "";
@@ -625,7 +739,7 @@ function Ensayo() {
         },
         onError: (message) => {
           setConnectionStatus(message);
-          toast.error(message);
+          toast.error(message, { id: "ensayo-microfono" });
         },
       });
       listenRef.current = handle;
@@ -636,6 +750,8 @@ function Ensayo() {
           finalEvalTimerRef.current = null;
         }
         handle?.stop();
+        setIsListening(false);
+        stopTake();
       };
     }
 
@@ -684,6 +800,7 @@ function Ensayo() {
 
     return () => {
       cancelled = true;
+      setIsSpeaking(false);
       stopSpeaking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -691,7 +808,8 @@ function Ensayo() {
     isRehearsing,
     activeLineIndex,
     currentLine?.id,
-    isMyTurn,
+    isHumanTurn,
+    turnLabel,
     isLecturaMode,
     preferredVoice,
     suggestEmotions,
@@ -876,18 +994,43 @@ function Ensayo() {
 
           <div className="bg-card border border-border/60 rounded-xl p-4 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs">
-              <div className="flex items-center gap-1.5 text-success">
+              <div
+                className={`flex items-center gap-1.5 ${isListening ? "text-primary" : isSpeaking ? "text-foreground" : "text-muted-foreground"}`}
+              >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${isListening || isSpeaking ? "bg-destructive animate-pulse" : "bg-success"}`}
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isListening
+                      ? "bg-primary animate-pulse"
+                      : isSpeaking
+                        ? "bg-foreground"
+                        : "bg-muted-foreground/50"
+                  }`}
                 />{" "}
                 {isSpeaking
                   ? "Voz del navegador"
                   : isListening
-                    ? "Escuchando"
+                    ? "Escuchando…"
                     : isRehearsing
-                      ? "En ensayo"
+                      ? "En silencio"
                       : "Listo"}
               </div>
+              {isListening ? (
+                <>
+                  <MicLevelMeter stream={micStream} />
+                  <p className="text-muted-foreground mt-1">
+                    Te escucho. Tras un momento de silencio comparo la línea.
+                  </p>
+                </>
+              ) : isRehearsing ? (
+                <p className="text-muted-foreground mt-1">
+                  El micrófono solo se abre en el turno de una persona. La voz del navegador lee los
+                  demás papeles.
+                </p>
+              ) : (
+                <p className="text-muted-foreground mt-1">
+                  El botón redondo inicia o detiene el ensayo. No hace falta mantenerlo pulsado.
+                </p>
+              )}
               <div className="font-mono text-foreground mt-0.5">{connectionStatus}</div>
               {transcript && (
                 <div className="text-muted-foreground mt-1">

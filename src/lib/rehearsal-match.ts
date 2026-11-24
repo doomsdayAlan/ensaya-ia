@@ -111,9 +111,10 @@ function contentWords(text: string) {
 
 function wordMatches(spoken: string, expected: string) {
   if (spoken === expected) return true;
-  if (expected.length > 3 && spoken.includes(expected)) return true;
-  if (spoken.length > 3 && expected.includes(spoken)) return true;
-  const allowedEdits = expected.length <= 4 ? 1 : expected.length <= 7 ? 2 : 3;
+  if (expected.length > 4 && spoken.includes(expected)) return true;
+  // Un typo en una palabra larga no cuenta como acierto total.
+  if (expected.length > 7) return false;
+  const allowedEdits = expected.length <= 5 ? 1 : 1;
   return levenshtein(spoken, expected) <= allowedEdits;
 }
 
@@ -182,18 +183,18 @@ export function evaluateSpokenLine(
 export function scoreRehearsal(input: ScoreRehearsalInput): RehearsalScore {
   const { userLineScores, skipped, repeated, userLinesCompleted, userLinesTotal } = input;
 
-  // memorization: promedio de scores Levenshtein/similitud SOLO de lineas del usuario
-  const memorization = userLineScores.length
-    ? Math.round(
-        (userLineScores.reduce((sum, value) => sum + value, 0) / userLineScores.length) * 100,
-      )
+  // Las líneas del usuario que no se dijeron cuentan como 0.
+  const unreached = Math.max(0, userLinesTotal - userLineScores.length);
+  const paddedScores = [...userLineScores, ...Array.from({ length: unreached }, () => 0)];
+  const memorization = paddedScores.length
+    ? Math.round((paddedScores.reduce((sum, value) => sum + value, 0) / paddedScores.length) * 100)
     : 0;
 
   // clarity: proxy de calidad de coincidencia (Levenshtein / lineSimilarity), no claridad acustica
   const clarity = memorization;
 
-  // rhythm: castigo por omisiones y repeticiones
-  const rhythm = Math.max(0, Math.min(100, 100 - skipped * 8 - repeated * 5));
+  // rhythm: castigo por líneas no alcanzadas, omisiones y repeticiones
+  const rhythm = Math.max(0, Math.min(100, 100 - unreached * 8 - skipped * 4 - repeated * 5));
 
   // expression: proxy por repeticiones vs completado (no expresividad vocal real)
   const completionRatio = userLinesTotal > 0 ? userLinesCompleted / userLinesTotal : 0;
