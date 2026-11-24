@@ -13,12 +13,12 @@ import {
 import { requestNotificationPermission } from "@/lib/session-prefs";
 import { isAuthRequired, setAuthRequired } from "@/lib/app-config";
 import { getStoredUserCount } from "@/lib/local-auth";
+import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
 
 export const Route = createFileRoute("/configuracion")({
   component: Configuracion,
 });
 
-const VOICES = ["Sofia (Femenina)", "Diego (Masculina)", "Valeria (Neutra)", "Tu voz"];
 const MODES = [
   ["individual", "Individual"],
   ["grupo", "En grupo"],
@@ -38,7 +38,8 @@ function Configuracion() {
   });
   const profile = data?.profile;
   const [displayName, setDisplayName] = useState("");
-  const [preferredVoice, setPreferredVoice] = useState(VOICES[0]);
+  const [preferredVoice, setPreferredVoice] = useState("Tu voz");
+  const [browserVoices, setBrowserVoices] = useState<string[]>([]);
   const [mode, setMode] = useState("individual");
   const [difficulty, setDifficulty] = useState(50);
   const [notifications, setNotifications] = useState(true);
@@ -50,6 +51,14 @@ function Configuracion() {
   useEffect(() => {
     setRequireLogin(isAuthRequired());
     void getStoredUserCount().then(setStoredUsers);
+  }, []);
+
+  useEffect(() => {
+    const load = () => setBrowserVoices(listBrowserVoiceNames());
+    load();
+    const synth = window.speechSynthesis;
+    synth?.addEventListener("voiceschanged", load);
+    return () => synth?.removeEventListener("voiceschanged", load);
   }, []);
 
   useEffect(() => {
@@ -141,7 +150,7 @@ function Configuracion() {
       )}
       {isError && (
         <div className="bg-card border border-destructive/40 rounded-xl p-5 text-sm text-destructive">
-          No se pudo cargar perfil_usuario.
+          No se pudo cargar tu perfil.
         </div>
       )}
       {data && !data.isAuthenticated && (
@@ -175,13 +184,34 @@ function Configuracion() {
               placeholder="Tu nombre artístico"
             />
             <div className="grid sm:grid-cols-2 gap-4">
-              <SelectBlock
-                icon={Volume2}
-                title="Voz del director / lector"
-                value={preferredVoice}
-                options={VOICES.map((voice) => [voice, voice] as const)}
-                onChange={setPreferredVoice}
-              />
+              <div>
+                <SelectBlock
+                  icon={Volume2}
+                  title="Voz del director / lector"
+                  value={preferredVoice}
+                  options={Array.from(
+                    new Set(["Tu voz", preferredVoice, ...browserVoices].filter(Boolean)),
+                  ).map((voice) => [voice, voice] as const)}
+                  onChange={setPreferredVoice}
+                />
+                <button
+                  type="button"
+                  className="mt-2 text-xs text-primary hover:underline"
+                  onClick={() => {
+                    void speakLine("Así suena la voz elegida.", preferredVoice).catch(() => {
+                      toast.error("Este navegador no tiene voces en español para la vista previa.");
+                    });
+                  }}
+                >
+                  Escuchar vista previa
+                </button>
+                {browserVoices.length === 0 ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Si el navegador aún no lista voces, recarga la página. Se usan las voces
+                    instaladas, sin un servicio de pago.
+                  </p>
+                ) : null}
+              </div>
               <SelectBlock
                 icon={Mic}
                 title="Modo de ensayo"

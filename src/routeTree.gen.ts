@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TerminosRouteImport } from './routes/terminos'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PrivacidadRouteImport } from './routes/privacidad'
+import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LibretosRouteImport } from './routes/libretos'
 import { Route as GruposRouteImport } from './routes/grupos'
@@ -37,6 +38,11 @@ const RegisterRoute = RegisterRouteImport.update({
 const PrivacidadRoute = PrivacidadRouteImport.update({
   id: '/privacidad',
   path: '/privacidad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/grupos': typeof GruposRouteWithChildren
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/perfil': typeof PerfilRoute
   '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
   '/terminos': typeof TerminosRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/finalizado': typeof FinalizadoRoute
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/perfil': typeof PerfilRoute
   '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
   '/terminos': typeof TerminosRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/grupos': typeof GruposRouteWithChildren
   '/libretos': typeof LibretosRoute
   '/login': typeof LoginRoute
+  '/perfil': typeof PerfilRoute
   '/privacidad': typeof PrivacidadRoute
   '/register': typeof RegisterRoute
   '/terminos': typeof TerminosRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/grupos'
     | '/libretos'
     | '/login'
+    | '/perfil'
     | '/privacidad'
     | '/register'
     | '/terminos'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/finalizado'
     | '/libretos'
     | '/login'
+    | '/perfil'
     | '/privacidad'
     | '/register'
     | '/terminos'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/grupos'
     | '/libretos'
     | '/login'
+    | '/perfil'
     | '/privacidad'
     | '/register'
     | '/terminos'
@@ -203,6 +215,7 @@ export interface RootRouteChildren {
   GruposRoute: typeof GruposRouteWithChildren
   LibretosRoute: typeof LibretosRoute
   LoginRoute: typeof LoginRoute
+  PerfilRoute: typeof PerfilRoute
   PrivacidadRoute: typeof PrivacidadRoute
   RegisterRoute: typeof RegisterRoute
   TerminosRoute: typeof TerminosRoute
@@ -229,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidad'
       fullPath: '/privacidad'
       preLoaderRoute: typeof PrivacidadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -334,6 +354,7 @@ const rootRouteChildren: RootRouteChildren = {
   GruposRoute: GruposRouteWithChildren,
   LibretosRoute: LibretosRoute,
   LoginRoute: LoginRoute,
+  PerfilRoute: PerfilRoute,
   PrivacidadRoute: PrivacidadRoute,
   RegisterRoute: RegisterRoute,
   TerminosRoute: TerminosRoute,

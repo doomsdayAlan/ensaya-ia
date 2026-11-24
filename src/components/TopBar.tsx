@@ -29,10 +29,13 @@ export function TopBar({ back }: { back?: { to: string; label: string } }) {
         </button>
         {loading ? null : user ? (
           <>
-            <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-border/60 text-sm">
+            <Link
+              to="/configuracion"
+              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-border/60 text-sm hover:border-primary/40"
+            >
               <UserIcon className="w-4 h-4 text-primary" />
               <span className="text-foreground/80 max-w-[160px] truncate">{displayName}</span>
-            </div>
+            </Link>
             <button
               onClick={async () => {
                 await signOut();

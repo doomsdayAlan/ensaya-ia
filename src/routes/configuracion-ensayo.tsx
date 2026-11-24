@@ -19,17 +19,111 @@ import {
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
 import { TopBar } from "@/components/TopBar";
 import { addCharacterToScript, getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
 import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
-import { getLocalScriptSetup } from "@/lib/local-library";
-import { getDemoScriptSetup } from "@/lib/demo-script";
+import { getLocalScriptSetup, saveLocalScriptSetup } from "@/lib/local-library";
 import {
   assignCharactersToHumans,
   computeConflictMatrixInMemory,
   type CastAssignmentResult,
 } from "@/lib/ai/actor-assignment";
+
+const EMOTIONS = ["Neutral", "Alegre", "Triste", "Enojo", "Miedo", "Calma"] as const;
+
+function CharacterVoiceEditor({
+  name,
+  voice,
+  emotion,
+  voices,
+  onPreview,
+  onSave,
+}: {
+  name: string;
+  voice: string;
+  emotion: string;
+  voices: string[];
+  onPreview: (voice: string) => void;
+  onSave: (next: { name: string; voice: string; emotion: string }) => void;
+}) {
+  const [nextName, setNextName] = useState(name);
+  const [nextVoice, setNextVoice] = useState(voice);
+  const [nextEmotion, setNextEmotion] = useState(emotion);
+  return (
+    <form
+      className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 border border-border/60 rounded-lg p-3 bg-surface/40"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (nextName.trim().length < 2) return;
+        onSave({ name: nextName.trim(), voice: nextVoice, emotion: nextEmotion });
+      }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <label className="text-xs text-muted-foreground">
+        Nombre
+        <input
+          value={nextName}
+          onChange={(event) => setNextName(event.target.value)}
+          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+        />
+      </label>
+      <label className="text-xs text-muted-foreground">
+        Voz del navegador
+        <select
+          value={nextVoice}
+          onChange={(event) => setNextVoice(event.target.value)}
+          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+        >
+          {voices.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-xs text-muted-foreground">
+        Emoción
+        <select
+          value={nextEmotion}
+          onChange={(event) => setNextEmotion(event.target.value)}
+          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+        >
+          {EMOTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+          {!EMOTIONS.includes(nextEmotion as (typeof EMOTIONS)[number]) ? (
+            <option value={nextEmotion}>{nextEmotion}</option>
+          ) : null}
+        </select>
+      </label>
+      <div className="sm:col-span-3 flex gap-2">
+        <button
+          type="button"
+          className="text-xs border border-border rounded-lg px-3 py-1.5"
+          onClick={() => onPreview(nextVoice)}
+        >
+          Escuchar
+        </button>
+        <button
+          type="submit"
+          className="text-xs bg-primary-gradient text-primary-foreground rounded-lg px-3 py-1.5"
+        >
+          Guardar
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export const Route = createFileRoute("/configuracion-ensayo")({
   component: ConfigEnsayo,
@@ -111,6 +205,8 @@ function ConfigEnsayo() {
   const [castModalOpen, setCastModalOpen] = useState(false);
   const [numPhysicalHumans, setNumPhysicalHumans] = useState(2);
   const [castResult, setCastResult] = useState<CastAssignmentResult | null>(null);
+  const [browserVoices, setBrowserVoices] = useState<string[]>([]);
+  const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
 
   const { data: profileData } = useQuery({
     queryKey: ["perfil-usuario"],
@@ -120,7 +216,6 @@ function ConfigEnsayo() {
   const { data: scripts = [], isLoading: scriptsLoading } = useQuery({
     queryKey: ["scripts", "catalog-v2"],
     queryFn: loadScriptsSafe,
-    placeholderData: [getDemoScriptSetup().script!],
     staleTime: 5_000,
   });
   const visibleScripts = (() => {
@@ -151,8 +246,6 @@ function ConfigEnsayo() {
     queryKey: ["script-setup-v2", selectedScriptId, selectedSceneId],
     queryFn: () => loadScriptSetupSafe(selectedScriptId || undefined, selectedSceneId || undefined),
     enabled: selectedScriptId !== "",
-    initialData: selectedScriptId ? undefined : getDemoScriptSetup(),
-    placeholderData: getDemoScriptSetup(),
   });
 
   function handleCalculateCast(actorsCount: number) {
@@ -177,6 +270,23 @@ function ConfigEnsayo() {
     setNumPhysicalHumans(actorsCount);
     setCastModalOpen(true);
   }
+
+  useEffect(() => {
+    const load = () => setBrowserVoices(listBrowserVoiceNames());
+    load();
+    const synth = window.speechSynthesis;
+    synth?.addEventListener("voiceschanged", load);
+    return () => synth?.removeEventListener("voiceschanged", load);
+  }, []);
+
+  useEffect(() => {
+    if (!castModalOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCastModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [castModalOpen]);
 
   useEffect(() => {
     const profile = profileData?.profile;
@@ -208,10 +318,26 @@ function ConfigEnsayo() {
       setSelectedScriptId(scriptIdFromSearch);
       return;
     }
-    if (!selectedScriptId && visibleScripts.length > 0 && visibleScripts[0]) {
-      setSelectedScriptId(visibleScripts[0].id);
-    }
-  }, [selectedScriptId, visibleScripts, scriptIdFromSearch, lockedGrupoId]);
+    if (selectedScriptId || !profileData || scriptsLoading) return;
+    const owned = visibleScripts.filter(
+      (script) => script.user_id === currentUserId && script.source_type !== "seed",
+    );
+    const pool = owned.length > 0 ? owned : visibleScripts;
+    const active = pool.find((script) => script.is_active && script.source_type !== "seed");
+    const latest = [...pool].sort((a, b) =>
+      (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
+    )[0];
+    const pick = active ?? latest;
+    if (pick) setSelectedScriptId(pick.id);
+  }, [
+    selectedScriptId,
+    visibleScripts,
+    scriptIdFromSearch,
+    lockedGrupoId,
+    profileData,
+    currentUserId,
+    scriptsLoading,
+  ]);
 
   useEffect(() => {
     if (!setup?.scene) return;
@@ -586,18 +712,44 @@ function ConfigEnsayo() {
                     <button
                       type="button"
                       onClick={() => {
-                        const myChars = castResult.humanAssignments[0]?.assignedCharacters ?? [];
-                        if (myChars.length > 0) {
-                          const wanted = myChars[0]!.toUpperCase();
-                          const targetChar = setup?.characters.find(
-                            (c) => c.name?.toUpperCase() === wanted,
-                          );
-                          if (targetChar) setSelectedCharacterId(targetChar.id);
-                        }
-                        setCastModalOpen(false);
-                        toast.success(
-                          `Reparto aplicado: Interpretas a ${castResult.humanAssignments[0]?.assignedCharacters.join(", ")}`,
+                        if (!setup?.script) return;
+                        const assigned = new Map<string, string>();
+                        castResult.humanAssignments.forEach((human, index) => {
+                          const actorType = index === 0 ? "user" : `actor-${index + 1}`;
+                          for (const name of human.assignedCharacters) {
+                            assigned.set(name.toUpperCase(), actorType);
+                          }
+                        });
+                        const characters = setup.characters.map((character) => ({
+                          ...character,
+                          actor_type: assigned.get(character.name.toUpperCase()) ?? "ai",
+                        }));
+                        const byId = new Map(
+                          characters.map((character) => [character.id, character]),
                         );
+                        saveLocalScriptSetup({
+                          ...setup,
+                          characters,
+                          lines: setup.lines.map((line) => ({
+                            ...line,
+                            character: line.character_id
+                              ? (byId.get(line.character_id) ?? line.character)
+                              : null,
+                          })),
+                        });
+                        void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+                        const mine = characters.find(
+                          (character) => character.actor_type === "user",
+                        );
+                        if (mine) setSelectedCharacterId(mine.id);
+                        setCastModalOpen(false);
+                        const labels = castResult.humanAssignments
+                          .map((human, index) => {
+                            const who = index === 0 ? "Tú" : `Actor ${index + 1}`;
+                            return `${who}: ${human.assignedCharacters.join(", ")}`;
+                          })
+                          .join(" · ");
+                        toast.success(`Reparto aplicado. ${labels}`);
                       }}
                       className="px-4 py-2 text-xs font-medium bg-primary-gradient text-primary-foreground rounded-lg shadow-sm"
                     >
@@ -633,50 +785,141 @@ function ConfigEnsayo() {
             <div className="space-y-3">
               {(setup?.characters || []).filter(Boolean).map((character) => {
                 const active = selectedCharacterId === character.id;
-                const tag = character.actor_type === "user" ? "Tú" : "Voz";
+                const tag =
+                  character.actor_type === "user"
+                    ? "Tú"
+                    : character.actor_type?.startsWith("actor-")
+                      ? `Actor ${character.actor_type.slice("actor-".length)}`
+                      : "Voz";
+
+                const voiceChoices = Array.from(
+                  new Set(
+                    ["Tu voz", character.voice ?? "", ...browserVoices].filter(
+                      (voice) => voice.trim().length > 0,
+                    ),
+                  ),
+                );
 
                 return (
-                  <button
-                    key={character.id}
-                    onClick={() => setSelectedCharacterId(character.id)}
-                    className={`w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 items-center border rounded-lg p-3 text-left transition ${
-                      active
-                        ? "bg-primary/10 border-primary/50"
-                        : "bg-surface/60 border-border/40 hover:border-primary/30"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-[140px]">
-                      <div className="w-9 h-9 rounded-full bg-primary/15 grid place-items-center text-primary text-sm font-semibold">
-                        {character.name?.[0] || "?"}
+                  <div key={character.id} className="space-y-2">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedCharacterId(character.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedCharacterId(character.id);
+                        }
+                      }}
+                      className={`w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 items-center border rounded-lg p-3 text-left transition ${
+                        active
+                          ? "bg-primary/10 border-primary/50"
+                          : "bg-surface/60 border-border/40 hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-[140px]">
+                        <div className="w-9 h-9 rounded-full bg-primary/15 grid place-items-center text-primary text-sm font-semibold">
+                          {character.name?.[0] || "?"}
+                        </div>
+                        <div>
+                          <div className="text-sm flex items-center gap-1.5">
+                            {character.name}
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded ${tag === "Tú" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
+                            >
+                              {tag}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {character.role ?? "Sin rol"}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm flex items-center gap-1.5">
-                          {character.name}
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded ${tag === "Tú" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}
+                      <MiniValue
+                        label="Voz"
+                        value={character.voice ?? "Sin voz"}
+                        icon={tag === "Voz" ? <Volume2 className="w-3.5 h-3.5" /> : null}
+                      />
+                      <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
+                      <div />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={`Acciones de ${character.name}`}
+                            className="p-1 text-muted-foreground"
+                            onClick={(event) => event.stopPropagation()}
                           >
-                            {tag}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {character.role ?? "Sin rol"}
-                        </div>
-                      </div>
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setEditingCharacterId((current) =>
+                                current === character.id ? null : character.id,
+                              )
+                            }
+                          >
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              void speakLine("Esta es la voz de este personaje.", character.voice);
+                            }}
+                          >
+                            Escuchar vista previa
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <MiniValue
-                      label="Voz"
-                      value={character.voice ?? "Sin voz"}
-                      icon={tag === "Voz" ? <Volume2 className="w-3.5 h-3.5" /> : null}
-                    />
-                    <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
-                    <div />
-                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                  </button>
+                    {editingCharacterId === character.id && setup?.script ? (
+                      <CharacterVoiceEditor
+                        name={character.name}
+                        voice={character.voice ?? "Tu voz"}
+                        emotion={character.base_emotion ?? "Neutral"}
+                        voices={voiceChoices}
+                        onPreview={(voice) => {
+                          void speakLine("Esta es la voz de este personaje.", voice);
+                        }}
+                        onSave={(next) => {
+                          const characters = setup.characters.map((item) =>
+                            item.id === character.id
+                              ? {
+                                  ...item,
+                                  name: next.name,
+                                  voice: next.voice,
+                                  base_emotion: next.emotion,
+                                }
+                              : item,
+                          );
+                          const byId = new Map(characters.map((item) => [item.id, item]));
+                          saveLocalScriptSetup({
+                            ...setup,
+                            characters,
+                            lines: setup.lines.map((line) => ({
+                              ...line,
+                              character: line.character_id
+                                ? (byId.get(line.character_id) ?? line.character)
+                                : line.character,
+                            })),
+                          });
+                          void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+                          setEditingCharacterId(null);
+                        }}
+                      />
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
             <p className="text-xs text-muted-foreground text-center mt-3 inline-flex items-center gap-1.5 w-full justify-center">
-              <Info className="w-3 h-3" /> Los personajes vienen de la tabla characters.
+              <Info className="w-3 h-3" /> Los personajes salen del libreto importado. Puedes
+              editarlos o reasignarlos.
             </p>
           </Section>
 
