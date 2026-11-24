@@ -245,8 +245,7 @@ function Configuracion() {
                 <div>
                   <h3 className="font-medium">Base de datos de cuentas</h3>
                   <p className="text-sm text-muted-foreground">
-                    IndexedDB en este navegador (tablas users y perfil_usuario). {storedUsers}{" "}
-                    cuenta
+                    Las cuentas se guardan en este navegador. {storedUsers} cuenta
                     {storedUsers === 1 ? "" : "s"} guardada{storedUsers === 1 ? "" : "s"}.
                   </p>
                 </div>
