@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:voice": "node --experimental-strip-types --experimental-transform-types src/lib/rehearsal-match.test.ts && node --experimental-strip-types --experimental-transform-types --import ./scripts/register-ts.mjs src/lib/ai/script-parser.test.ts && node --experimental-strip-types --experimental-transform-types src/lib/ai/interpretation.test.ts",
+    "test:voice": "node --experimental-strip-types --experimental-transform-types src/lib/rehearsal-match.test.ts && node --experimental-strip-types --experimental-transform-types --import ./scripts/register-ts.mjs src/lib/ai/script-parser.test.ts && node --experimental-strip-types --experimental-transform-types src/lib/ai/interpretation.test.ts && node --experimental-strip-types --experimental-transform-types src/lib/session-followup.test.ts",
     "verify:dist": "node scripts/verify-railway-dist.mjs",
     "start": "node railway-server.mjs"
   },
