@@ -4,6 +4,7 @@ import {
   getLocalAuthUser,
   isLocalUserId,
   loadLocalProfile,
+  rememberLibraryClearedThisSession,
   saveLocalProfile,
 } from "@/lib/local-auth";
 import {
@@ -28,7 +29,8 @@ import { requestScriptSegment } from "@/lib/ai/request-script-segment";
 import type { ScriptSegmentResult } from "@/lib/ai/types";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import { inferVoiceLabel } from "@/lib/rehearsal-ai";
-import { getDemoScriptSetup } from "@/lib/demo-script";
+import { DEMO_SCRIPT_ID, getDemoScriptSetup } from "@/lib/demo-script";
+import { catalogActorType, scriptDeleteDecision } from "@/lib/session-cast";
 import { withTimeout } from "@/lib/browser";
 import {
   cleanCharacterName,
@@ -467,8 +469,8 @@ export function buildScriptSetupFromSegment(
     script_id: scriptId,
     name,
     role: null,
-    actor_type: index === 0 ? "user" : "ai",
-    voice: index === 0 ? "Tu voz" : inferVoiceLabel(name),
+    actor_type: "ai",
+    voice: inferVoiceLabel(name),
     base_emotion: "Neutral",
     sort_order: index + 1,
     created_at: now,
@@ -759,8 +761,21 @@ export async function setActiveScript(script: ScriptRecord) {
   return updateScript(script.id, { is_active: true });
 }
 
-export async function softDeleteScript(script: ScriptRecord) {
-  return updateScript(script.id, { deleted_at: new Date().toISOString(), is_active: false });
+export async function softDeleteScript(script: ScriptRecord | string) {
+  const record = typeof script === "string" ? findOwnedScript(script) : script;
+  const decision = scriptDeleteDecision(record, DEMO_SCRIPT_ID);
+  if (decision === "seed") {
+    throw new Error("El libreto de demostración no se puede eliminar.");
+  }
+  if (decision === "missing" || !record || typeof record === "string") {
+    throw new Error("No se encontro el libreto local.");
+  }
+  rememberLibraryClearedThisSession();
+  return updateScript(record.id, { deleted_at: new Date().toISOString(), is_active: false });
+}
+
+function findOwnedScript(scriptId: string) {
+  return listLocalScripts(true).find((item) => item.id === scriptId) ?? null;
 }
 
 export async function restoreScript(script: ScriptRecord) {
@@ -770,6 +785,10 @@ export async function restoreScript(script: ScriptRecord) {
 export async function deleteScriptPermanently(script: ScriptRecord) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Inicia sesión para eliminar libretos.");
+  if (scriptDeleteDecision(script, DEMO_SCRIPT_ID) === "seed") {
+    throw new Error("El libreto de demostración no se puede eliminar.");
+  }
+  rememberLibraryClearedThisSession();
 
   if (isLocalUserId(user.id) || script.id.startsWith("local-")) {
     removeLocalScript(script.id, user.id);
@@ -890,7 +909,7 @@ async function insertCharactersForScript(
       script_id: scriptId,
       name,
       role: source?.role ?? null,
-      actor_type: source?.actor_type ?? (index === 0 ? "user" : "ai"),
+      actor_type: catalogActorType(source?.actor_type),
       voice: source?.voice ?? null,
       base_emotion: source?.base_emotion ?? "Neutral",
       sort_order: source?.sort_order ?? index + 1,

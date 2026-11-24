@@ -15,6 +15,7 @@ import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
+import { catalogActorType } from "@/lib/session-cast";
 
 const LIBRARY_KEY = "ensaya-ia-library";
 
@@ -188,8 +189,8 @@ export function saveImportedLocalScript(
     script_id: scriptId,
     name,
     role: null,
-    actor_type: index === 0 ? "user" : "ai",
-    voice: index === 0 ? "Tu voz" : "Sofia (Femenina)",
+    actor_type: "ai",
+    voice: "Sofia (Femenina)",
     base_emotion: "Neutral",
     sort_order: index + 1,
     created_at: now,
@@ -279,7 +280,13 @@ export function duplicateLocalSetup(setup: ScriptSetup, userId: string) {
   const characters: CharacterRecord[] = setup.characters.map((character) => {
     const id = `local-char-${crypto.randomUUID()}`;
     charIdMap.set(character.id, id);
-    return { ...character, id, script_id: scriptId, created_at: now };
+    return {
+      ...character,
+      id,
+      script_id: scriptId,
+      created_at: now,
+      actor_type: catalogActorType(character.actor_type),
+    };
   });
 
   const scenes = setup.scenes.map((scene) => {
@@ -400,14 +407,16 @@ export function rewriteLocalScriptDialogue(scriptId: string, userId: string, raw
   );
   const characters: CharacterRecord[] = names.map((name, order) => {
     const prev = existingByName.get(name.toUpperCase());
-    if (prev) return { ...prev, sort_order: order + 1 };
+    if (prev) {
+      return { ...prev, sort_order: order + 1, actor_type: catalogActorType(prev.actor_type) };
+    }
     return {
       id: `local-char-${crypto.randomUUID()}`,
       script_id: scriptId,
       name,
       role: null,
-      actor_type: order === 0 ? "user" : "ai",
-      voice: order === 0 ? "Tu voz" : "Sofia (Femenina)",
+      actor_type: "ai",
+      voice: "Sofia (Femenina)",
       base_emotion: "Neutral",
       sort_order: order + 1,
       created_at: now,

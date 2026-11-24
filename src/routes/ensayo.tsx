@@ -29,6 +29,7 @@ import {
   TERMS_VERSION,
   shouldRequestInterpretation,
 } from "@/lib/ai/interpretation";
+import { humanIdsFor, roleLabelFor, rolesForSession } from "@/lib/session-cast";
 import {
   buildFeedback,
   canUseSpeechRecognition,
@@ -159,6 +160,7 @@ function Ensayo() {
     "El botón redondo inicia o detiene el ensayo.",
   );
   const [isRehearsing, setIsRehearsing] = useState(false);
+  const [closingMessage, setClosingMessage] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
@@ -191,10 +193,7 @@ function Ensayo() {
   const nextLine = lines[activeLineIndex + 1] ?? null;
   const afterLine = lines[activeLineIndex + 2] ?? null;
   const selectedCharacterId =
-    activeConfig?.selectedCharacterId ??
-    latest?.selected_character_id ??
-    setup?.characters.find((item) => item.actor_type === "user")?.id ??
-    null;
+    activeConfig?.selectedCharacterId ?? latest?.selected_character_id ?? null;
   const selectedCharacter =
     setup?.characters.find((item) => item.id === selectedCharacterId) ??
     latest?.selectedCharacter ??
@@ -211,25 +210,20 @@ function Ensayo() {
   const total = lines.length || latest?.total_lines || 1;
   const completed = Math.min(total, Math.max(activeLineIndex, scoresRef.current.length));
   const progress = Math.min(100, Math.round((completed / total) * 100));
+  const sessionRoles = useMemo(
+    () =>
+      rolesForSession({
+        selectedCharacterId,
+        sessionCast: activeConfig?.sessionCast,
+      }),
+    [selectedCharacterId, activeConfig?.sessionCast],
+  );
   const isMyTurn = Boolean(currentLine && currentLine.character_id === selectedCharacterId);
-  const turnLabel = (() => {
-    const actorType = currentLine?.character?.actor_type;
-    if (actorType === "user" || isMyTurn) return "Tú";
-    if (actorType?.startsWith("actor-")) return `Actor ${actorType.slice("actor-".length)}`;
-    return null;
-  })();
-  const isHumanTurn = Boolean(turnLabel);
+  const turnLabel = roleLabelFor(currentLine?.character_id, sessionRoles);
+  const humanTurnLabel = turnLabel === "voz" ? null : turnLabel;
+  const isHumanTurn = Boolean(humanTurnLabel);
   const speechOk = canUseSpeechRecognition() && canUseSpeechSynthesis();
-  const humanCharacterIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const character of setup?.characters ?? []) {
-      if (character.actor_type === "user" || character.actor_type?.startsWith("actor-")) {
-        ids.add(character.id);
-      }
-    }
-    if (selectedCharacterId) ids.add(selectedCharacterId);
-    return ids;
-  }, [setup?.characters, selectedCharacterId]);
+  const humanCharacterIds = useMemo(() => humanIdsFor(sessionRoles), [sessionRoles]);
   const userLinesTotal = useMemo(
     () =>
       lines.filter((line) => line.character_id && humanCharacterIds.has(line.character_id)).length,
@@ -547,6 +541,7 @@ function Ensayo() {
         hasTakes: interpretationLines.length > 0,
       });
     if (wantsInterpretation && takeScriptId && takeGroupId && profile?.user_id) {
+      setClosingMessage("Analizando la interpretación…");
       try {
         const collected = await collectInterpretationTakes({
           scriptId: takeScriptId,
@@ -782,7 +777,7 @@ function Ensayo() {
         return;
       }
       setConnectionStatus(
-        turnLabel === "Tú"
+        humanTurnLabel === "Tú"
           ? "Tu turno. Di la línea en voz alta."
           : `Turno de ${turnLabel}. Pasa el micrófono.`,
       );
@@ -884,7 +879,7 @@ function Ensayo() {
     activeLineIndex,
     currentLine?.id,
     isHumanTurn,
-    turnLabel,
+    humanTurnLabel,
     isLecturaMode,
     preferredVoice,
     suggestEmotions,
@@ -989,6 +984,13 @@ function Ensayo() {
   return (
     <AppShell>
       <TopBar back={{ to: "/", label: "Modo ensayo" }} />
+      {closingMessage ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 px-6">
+          <p className="rounded-xl border border-border/60 bg-card px-5 py-4 text-sm">
+            {closingMessage}
+          </p>
+        </div>
+      ) : null}
 
       {loading && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
@@ -1051,21 +1053,12 @@ function Ensayo() {
           <LineCard
             title="Línea actual"
             line={currentLine}
-            selectedCharacterId={selectedCharacterId}
+            roles={sessionRoles}
             active
             speaking={isSpeaking && !isHumanTurn}
           />
-          <LineCard
-            title="Siguiente línea"
-            line={nextLine}
-            selectedCharacterId={selectedCharacterId}
-          />
-          <LineCard
-            title="Después"
-            line={afterLine}
-            selectedCharacterId={selectedCharacterId}
-            faded
-          />
+          <LineCard title="Siguiente línea" line={nextLine} roles={sessionRoles} />
+          <LineCard title="Después" line={afterLine} roles={sessionRoles} faded />
 
           <div className="bg-card border border-border/60 rounded-xl p-4 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs">
@@ -1213,7 +1206,7 @@ function Ensayo() {
                 <CharRow
                   key={character.id}
                   icon={character.id === selectedCharacter?.id ? Crown : Drama}
-                  name={`${character.name} (${rehearsalRoleLabel(character.actor_type, character.id, selectedCharacterId)})`}
+                  name={`${character.name} (${roleLabelFor(character.id, sessionRoles)})`}
                   status={character.id === currentLine?.character_id ? "Activo" : "En espera"}
                   muted={character.id === selectedCharacter?.id}
                   playing={isRehearsing && character.id === currentLine?.character_id}
@@ -1232,10 +1225,10 @@ function Ensayo() {
               value={
                 isLecturaMode
                   ? "Lectura en voz alta"
-                  : turnLabel === "Tú"
+                  : humanTurnLabel === "Tú"
                     ? "Tu turno"
-                    : turnLabel
-                      ? `Turno de ${turnLabel}`
+                    : humanTurnLabel
+                      ? `Turno de ${humanTurnLabel}`
                       : "Voz del navegador"
               }
             />
@@ -1306,36 +1299,22 @@ function Ensayo() {
   );
 }
 
-function rehearsalRoleLabel(
-  actorType: string | null | undefined,
-  characterId: string | null | undefined,
-  selectedCharacterId: string | null,
-) {
-  if (actorType === "user" || (characterId && characterId === selectedCharacterId)) return "Tú";
-  if (actorType?.startsWith("actor-")) return `Actor ${actorType.slice("actor-".length)}`;
-  return "voz";
-}
-
 function LineCard({
   title,
   line,
-  selectedCharacterId,
+  roles,
   active,
   faded,
   speaking,
 }: {
   title: string;
   line: ScriptLineWithCharacter | null;
-  selectedCharacterId: string | null;
+  roles: ReturnType<typeof rolesForSession>;
   active?: boolean;
   faded?: boolean;
   speaking?: boolean;
 }) {
-  const role = rehearsalRoleLabel(
-    line?.character?.actor_type,
-    line?.character_id,
-    selectedCharacterId,
-  );
+  const role = roleLabelFor(line?.character_id, roles);
   const tone = role === "Tú" ? "text-primary" : role === "voz" ? "text-success" : "text-foreground";
 
   return (

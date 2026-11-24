@@ -916,7 +916,7 @@ function Libretos() {
                     search: { scriptId: script.id },
                   });
                 }}
-                onTrash={() => deleteMutation.mutate(script.id)}
+                onTrash={() => deleteMutation.mutate(script)}
               />
             ))}
           </div>
@@ -1000,7 +1000,7 @@ function Libretos() {
                           >
                             <span>{character.name}</span>
                             <span className="text-muted-foreground">
-                              {character.actor_type === "user" ? "Tú" : "Voz"}
+                              {character.voice || "Voz"}
                             </span>
                           </div>
                         ))}

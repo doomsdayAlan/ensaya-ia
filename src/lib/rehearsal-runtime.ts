@@ -9,6 +9,8 @@ import { canUseBrowserStorage, readJson, removeKey, withTimeout, writeJson } fro
 import { getLocalAuthUser } from "@/lib/local-auth";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
+import { compactHistoryDetail } from "@/lib/history-detail";
+import type { SessionCastMember } from "@/lib/session-cast";
 import {
   getScriptSetup,
   getScripts,
@@ -42,6 +44,8 @@ export type ActiveRehearsal = {
   grupoId?: string | null;
   /** Si true, todas las lineas TTS usan preferred_voice del perfil. */
   useProfileVoiceForAll?: boolean;
+  /** Reparto humano de esta sesión. No se lee del libreto. */
+  sessionCast?: SessionCastMember[] | null;
 };
 
 export type RehearsalLineNote = {
@@ -140,8 +144,13 @@ export function loadLocalReport(): LocalRehearsalReport | null {
   ]);
 }
 
+type StoredHistoryEntry = RehearsalSummary & {
+  lineNotes?: RehearsalLineNote[];
+  interpretation?: LocalRehearsalReport["interpretation"];
+};
+
 function readHistory() {
-  return readJson<RehearsalSummary[]>(
+  return readJson<StoredHistoryEntry[]>(
     localStorage,
     HISTORY_KEY,
     [],
@@ -190,6 +199,8 @@ export function loadReportFromHistoryId(id: string): LocalRehearsalReport | null
     score: row.score ?? 0,
     feedback: row.feedback_summary ?? "Sin retroalimentacion guardada.",
     feedbackSource: "history",
+    lineNotes: row.lineNotes,
+    interpretation: row.interpretation ?? null,
   };
   writeJson(sessionStorage, REPORT_KEY, report);
   return report;
@@ -259,13 +270,19 @@ function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContex
     },
     selectedCharacter: context?.selectedCharacter ?? null,
   };
+  const detail = compactHistoryDetail(report);
+  const entry: StoredHistoryEntry = {
+    ...summary,
+    lineNotes: detail.lineNotes,
+    interpretation: detail.interpretation,
+  };
   writeJson(
     localStorage,
     HISTORY_KEY,
     (() => {
       const previous = readHistory();
       const others = previous.filter((row) => row.user_id !== userId);
-      const mine = [summary, ...previous.filter((row) => row.user_id === userId)].slice(
+      const mine = [entry, ...previous.filter((row) => row.user_id === userId)].slice(
         0,
         HISTORY_LIMIT,
       );
@@ -319,6 +336,7 @@ export async function startLocalRehearsal(draft: {
   source: "supabase" | "demo";
   grupoId?: string | null;
   useProfileVoiceForAll?: boolean;
+  sessionCast?: SessionCastMember[] | null;
 }) {
   const active: ActiveRehearsal = {
     scriptId: draft.scriptId,
@@ -334,17 +352,14 @@ export async function startLocalRehearsal(draft: {
     source: draft.source,
     grupoId: draft.grupoId ?? null,
     useProfileVoiceForAll: draft.useProfileVoiceForAll ?? false,
+    sessionCast: draft.sessionCast ?? null,
   };
   saveActiveRehearsal(active);
   return active;
 }
 
-export function defaultCharacterId(characters: CharacterRecord[]) {
-  return (
-    characters.find((character) => character.actor_type === "user")?.id ??
-    characters[0]?.id ??
-    DEMO_ROMEO_ID
-  );
+export function defaultCharacterId(_characters: CharacterRecord[]): string | null {
+  return null;
 }
 
 export function demoIds() {

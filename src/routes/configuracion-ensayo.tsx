@@ -29,6 +29,7 @@ import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
 import { TopBar } from "@/components/TopBar";
 import { addCharacterToScript, getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
+import type { SessionCastMember } from "@/lib/session-cast";
 import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
 import { getLocalScriptSetup, saveLocalScriptSetup } from "@/lib/local-library";
 import {
@@ -193,6 +194,7 @@ function ConfigEnsayo() {
   });
   const [selectedSceneId, setSelectedSceneId] = useState("");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const [sessionCast, setSessionCast] = useState<SessionCastMember[] | null>(null);
   const [mode, setMode] = useState(modeFromSearch === "grupo" ? "grupo" : "individual");
   const [diff, setDiff] = useState(50);
   const [emo, setEmo] = useState(true);
@@ -345,16 +347,17 @@ function ConfigEnsayo() {
   }, [setup?.scene]);
 
   useEffect(() => {
+    setSessionCast(null);
+    setSelectedCharacterId(null);
+  }, [setup?.script?.id]);
+
+  useEffect(() => {
     if (!setup?.characters?.length) {
       setSelectedCharacterId(null);
       return;
     }
-    setSelectedCharacterId(
-      (current) =>
-        current ??
-        setup.characters.find((char) => char?.actor_type === "user")?.id ??
-        setup.characters[0]?.id ??
-        null,
+    setSelectedCharacterId((current) =>
+      current && setup.characters.some((char) => char?.id === current) ? current : null,
     );
   }, [setup?.characters]);
 
@@ -481,6 +484,7 @@ function ConfigEnsayo() {
         source: setup.script.id.startsWith("00000000-0000-4000-8000") ? "demo" : "supabase",
         grupoId,
         useProfileVoiceForAll,
+        sessionCast,
       });
     },
     onSuccess: (active) => {
@@ -498,9 +502,7 @@ function ConfigEnsayo() {
   const selectedMode = MODES.find((item) => item.value === mode) ?? MODES[0];
 
   const selectedCharacter =
-    setup?.characters?.find((character) => character?.id === selectedCharacterId) ??
-    setup?.characters?.[0] ??
-    null;
+    setup?.characters?.find((character) => character?.id === selectedCharacterId) ?? null;
 
   return (
     <AppShell>
@@ -523,7 +525,7 @@ function ConfigEnsayo() {
           </button>
           <button
             onClick={() => startRehearsal.mutate()}
-            disabled={startRehearsal.isPending || setupLoading}
+            disabled={startRehearsal.isPending || setupLoading || !selectedCharacterId}
             className="inline-flex items-center gap-2 bg-primary-gradient text-primary-foreground rounded-lg px-5 py-2 text-sm font-medium shadow-glow disabled:opacity-60"
           >
             <Play className="w-4 h-4 fill-current" />{" "}
@@ -713,35 +715,19 @@ function ConfigEnsayo() {
                       type="button"
                       onClick={() => {
                         if (!setup?.script) return;
-                        const assigned = new Map<string, string>();
+                        const members: SessionCastMember[] = [];
                         castResult.humanAssignments.forEach((human, index) => {
                           const actorType = index === 0 ? "user" : `actor-${index + 1}`;
                           for (const name of human.assignedCharacters) {
-                            assigned.set(name.toUpperCase(), actorType);
+                            const character = setup.characters.find(
+                              (item) => item.name.toUpperCase() === name.toUpperCase(),
+                            );
+                            if (character) members.push({ characterId: character.id, actorType });
                           }
                         });
-                        const characters = setup.characters.map((character) => ({
-                          ...character,
-                          actor_type: assigned.get(character.name.toUpperCase()) ?? "ai",
-                        }));
-                        const byId = new Map(
-                          characters.map((character) => [character.id, character]),
-                        );
-                        saveLocalScriptSetup({
-                          ...setup,
-                          characters,
-                          lines: setup.lines.map((line) => ({
-                            ...line,
-                            character: line.character_id
-                              ? (byId.get(line.character_id) ?? line.character)
-                              : null,
-                          })),
-                        });
-                        void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
-                        const mine = characters.find(
-                          (character) => character.actor_type === "user",
-                        );
-                        if (mine) setSelectedCharacterId(mine.id);
+                        setSessionCast(members);
+                        const mine = members.find((member) => member.actorType === "user");
+                        if (mine) setSelectedCharacterId(mine.characterId);
                         setCastModalOpen(false);
                         const labels = castResult.humanAssignments
                           .map((human, index) => {
@@ -785,12 +771,16 @@ function ConfigEnsayo() {
             <div className="space-y-3">
               {(setup?.characters || []).filter(Boolean).map((character) => {
                 const active = selectedCharacterId === character.id;
-                const tag =
-                  character.actor_type === "user"
+                const castMember = sessionCast?.find(
+                  (member) => member.characterId === character.id,
+                );
+                const tag = castMember
+                  ? castMember.actorType.startsWith("actor-")
+                    ? `Actor ${castMember.actorType.slice("actor-".length)}`
+                    : "Tú"
+                  : active
                     ? "Tú"
-                    : character.actor_type?.startsWith("actor-")
-                      ? `Actor ${character.actor_type.slice("actor-".length)}`
-                      : "Voz";
+                    : "Voz";
 
                 const voiceChoices = Array.from(
                   new Set(
@@ -805,11 +795,23 @@ function ConfigEnsayo() {
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => setSelectedCharacterId(character.id)}
+                      onClick={() => {
+                        setSelectedCharacterId(character.id);
+                        setSessionCast((current) =>
+                          current?.some((member) => member.characterId === character.id)
+                            ? current
+                            : null,
+                        );
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           setSelectedCharacterId(character.id);
+                          setSessionCast((current) =>
+                            current?.some((member) => member.characterId === character.id)
+                              ? current
+                              : null,
+                          );
                         }
                       }}
                       className={`w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 items-center border rounded-lg p-3 text-left transition ${

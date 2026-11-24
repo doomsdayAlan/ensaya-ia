@@ -264,7 +264,20 @@ function persistUserSession(account: { id: string; email: string; displayName: s
   });
 }
 
+const SKIP_DEMO_SEED_KEY = "ensaya-ia-skip-demo-seed";
+
+export function rememberLibraryClearedThisSession() {
+  if (!canUseBrowserStorage()) return;
+  sessionStorage.setItem(SKIP_DEMO_SEED_KEY, "1");
+}
+
+export function demoSeedBlockedThisSession() {
+  if (!canUseBrowserStorage()) return false;
+  return sessionStorage.getItem(SKIP_DEMO_SEED_KEY) === "1";
+}
+
 function seedDemoScripts(userId: string) {
+  if (demoSeedBlockedThisSession()) return;
   const owned = listLocalScripts(true).filter((script) => script.user_id === userId);
   if (owned.length === 0) {
     duplicateLocalSetup(getDemoScriptSetup(), userId);
