@@ -27,6 +27,7 @@ export { saveLocalScriptSetup, savePipelineScriptSetup };
 import { requestScriptSegment } from "@/lib/ai/request-script-segment";
 import type { ScriptSegmentResult } from "@/lib/ai/types";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
+import { inferVoiceLabel } from "@/lib/rehearsal-ai";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { withTimeout } from "@/lib/browser";
 import {
@@ -413,6 +414,17 @@ async function segmentImportedScript(
  * Convierte la respuesta de Gemini (requestScriptSegment) al ScriptSetup de revisión/ensayo.
  * No persiste nada; el guardado ocurre al confirmar la revisión.
  */
+function isChorusName(name: string) {
+  return /^(?:TODOS|TODAS)(?:\s+L[OA]S\s+PRESENTES)?$/i.test(name.trim());
+}
+
+function actKeyFromTitle(title: string) {
+  const match = title.match(
+    /^(PRIMER\s+ACTO|SEGUNDO\s+ACTO|TERCER\s+ACTO|CUARTO\s+ACTO|QUINTO\s+ACTO|SEXTO\s+ACTO|ACTO\s+(?:[IVXLCDM]+|\d+))/i,
+  );
+  return match ? match[1].replace(/\s+/g, " ").trim().toUpperCase() : null;
+}
+
 export function buildScriptSetupFromSegment(
   draft: ScriptImportDraft,
   userId: string,
@@ -433,14 +445,27 @@ export function buildScriptSetupFromSegment(
     ),
   );
   const names = namesFromSegment.length > 0 ? namesFromSegment : namesFromLines;
+  const soloNames = new Set(
+    names
+      .map((name) => name.toUpperCase())
+      .filter((name) => !name.includes(" Y ") && !isChorusName(name)),
+  );
+  const castNames = names.filter((name) => {
+    const upper = name.toUpperCase();
+    if (isChorusName(upper)) return false;
+    if (upper.includes(" Y ")) {
+      return !upper.split(/\s+Y\s+/).every((part) => soloNames.has(part));
+    }
+    return true;
+  });
 
-  const characters: CharacterRecord[] = names.map((name, index) => ({
+  const characters: CharacterRecord[] = castNames.map((name, index) => ({
     id: `local-char-${crypto.randomUUID()}`,
     script_id: scriptId,
     name,
     role: null,
     actor_type: index === 0 ? "user" : "ai",
-    voice: index === 0 ? "Tu voz" : "Sofia (Femenina)",
+    voice: index === 0 ? "Tu voz" : inferVoiceLabel(name),
     base_emotion: "Neutral",
     sort_order: index + 1,
     created_at: now,
@@ -455,7 +480,7 @@ export function buildScriptSetupFromSegment(
     genre: draft.genre?.trim() || "Importado",
     act_count: Math.max(
       1,
-      sceneGroups.filter((group) => /^(ACTO|Acto)\b/i.test(group.title)).length || 1,
+      new Set(sceneGroups.map((group) => actKeyFromTitle(group.title)).filter(Boolean)).size || 1,
     ),
     description:
       draft.description?.trim() ||
@@ -484,16 +509,28 @@ export function buildScriptSetupFromSegment(
   const lines: ScriptLineWithCharacter[] = sceneGroups.flatMap((group, sceneIndex) => {
     const scene = scenes[sceneIndex]!;
     return group.lines.map((line, index) => {
-      const character = line.characterName
-        ? (byName.get(cleanCharacterName(line.characterName).toUpperCase()) ?? null)
-        : null;
+      const rawSpeaker = line.characterName
+        ? cleanCharacterName(line.characterName).toUpperCase()
+        : "";
+      let character = rawSpeaker ? (byName.get(rawSpeaker) ?? null) : null;
+      let cue = line.cue?.trim() || null;
+      if (rawSpeaker && isChorusName(rawSpeaker)) {
+        character = null;
+        cue = cue ? `${rawSpeaker} · ${cue}` : rawSpeaker;
+      } else if (rawSpeaker.includes(" Y ")) {
+        const parts = rawSpeaker.split(/\s+Y\s+/);
+        if (parts.every((part) => byName.has(part))) {
+          character = byName.get(parts[0]) ?? null;
+          cue = cue ? `${rawSpeaker} · ${cue}` : rawSpeaker;
+        }
+      }
       return {
         id: `local-line-${crypto.randomUUID()}`,
         scene_id: scene.id,
         character_id: character?.id ?? null,
         line_order: index + 1,
         text: line.text,
-        cue: null,
+        cue,
         duration_seconds: estimateLineDuration(line.text),
         created_at: now,
         character,

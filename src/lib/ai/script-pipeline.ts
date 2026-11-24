@@ -23,6 +23,7 @@ import {
   type CastAssignmentResult,
 } from "./actor-assignment";
 import { checkTinyLLMHardware, type HardwareStatus } from "./tiny-character-detector";
+import { inferVoiceLabel } from "@/lib/rehearsal-ai";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import type {
   CharacterRecord,
@@ -102,15 +103,6 @@ export function pipelineResultFromSetup(
     },
   };
 }
-
-const AVAILABLE_TTS_VOICES = [
-  "Sofia (Femenina)",
-  "Diego (Masculino)",
-  "Carmen (Femenina)",
-  "Mateo (Masculino)",
-  "Lucia (Femenina)",
-  "Alejandro (Masculino)",
-];
 
 export function sanitizeRawText(text: string): string {
   return text
@@ -200,14 +192,13 @@ export async function executeScriptPipeline(
   // 1. Crear registros de Personajes
   const characters: CharacterRecord[] = conflictMatrix.characterStats.map((stat, idx) => {
     const isFirst = idx === 0;
-    const voiceIndex = idx % AVAILABLE_TTS_VOICES.length;
     return {
       id: `local-char-${crypto.randomUUID()}`,
       script_id: scriptId,
       name: stat.name,
       role: `${stat.totalWords} palabras (${stat.scenes.size} escenas)`,
       actor_type: isFirst ? "user" : "ai",
-      voice: isFirst ? "Tu voz" : AVAILABLE_TTS_VOICES[voiceIndex],
+      voice: isFirst ? "Tu voz" : inferVoiceLabel(stat.name),
       base_emotion: "Neutral",
       sort_order: idx + 1,
       created_at: now,
@@ -277,14 +268,19 @@ export async function executeScriptPipeline(
     charactersPerScene[scRecord.title] = Array.from(sceneCharactersSet);
   }
 
-  // 4. Conteo de Actos
-  const actsCount = Math.max(1, geometricResult.scenes.filter((s) => s.actTitle).length || 1);
+  // 4. Conteo de actos distintos (no una entrada por escena).
+  const distinctActs = new Set(
+    geometricResult.scenes
+      .map((scene) => scene.actTitle?.replace(/\s+/g, " ").trim().toUpperCase())
+      .filter((title): title is string => Boolean(title)),
+  );
+  const actsCount = Math.max(1, distinctActs.size);
 
   // 5. Registro del Libreto
   const script: ScriptRecord = {
     id: scriptId,
     user_id: userId,
-    title: draft.title.trim() || "Libreto importado",
+    title: geometricResult.workTitle?.trim() || draft.title.trim() || "Libreto importado",
     author: draft.author?.trim() || null,
     genre:
       draft.genre?.trim() || (rules.formatoDetectado === "teatro_hispano" ? "Teatro" : "Guion"),

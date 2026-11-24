@@ -100,23 +100,36 @@ export function parseScriptSegmentPayload(
     if (name) canonicalName(name, aliases);
   }
 
-  const rawScenes = Array.isArray(row.scenes) ? row.scenes.slice(0, 80) : [];
+  const rawScenes = Array.isArray(row.scenes) ? row.scenes.slice(0, 200) : [];
   const scenes: SegmentedScriptScene[] = [];
   for (const scene of rawScenes) {
     if (!scene || typeof scene !== "object") continue;
     const sceneRow = scene as Record<string, unknown>;
     const title = asString(sceneRow.title, 120) || `Escena ${scenes.length + 1}`;
     const location = asString(sceneRow.location, 80) || null;
-    const rawLines = Array.isArray(sceneRow.lines) ? sceneRow.lines.slice(0, 400) : [];
+    const rawLines = Array.isArray(sceneRow.lines) ? sceneRow.lines.slice(0, 2000) : [];
     const lines: SegmentedScriptScene["lines"] = [];
     for (const line of rawLines) {
       if (!line || typeof line !== "object") continue;
       const lineRow = line as Record<string, unknown>;
-      const text = asString(lineRow.text, 800);
+      const text = asString(lineRow.text, 4000);
       if (!text) continue;
       const rawName = asString(lineRow.character ?? lineRow.characterName, 40);
       const characterName = rawName ? canonicalName(rawName, aliases) : null;
-      lines.push({ characterName, text });
+      const cueField = asString(
+        lineRow.cue ?? lineRow.parenthetical ?? lineRow.stageDirection,
+        400,
+      );
+      const leading = text.match(/^\(([^)]{1,180})\)\s*/);
+      const spoken = leading ? text.slice(leading[0].length).trim() : text;
+      const cue =
+        [cueField, leading?.[1]?.trim()].filter((part) => Boolean(part)).join(" · ") || null;
+      if (!spoken) {
+        const previous = lines[lines.length - 1];
+        if (previous && cue) previous.cue = previous.cue ? `${previous.cue} · ${cue}` : cue;
+        continue;
+      }
+      lines.push({ characterName, text: spoken, cue });
     }
     if (lines.length) scenes.push({ title, location, lines });
   }
@@ -189,11 +202,13 @@ async function generateOpenAiJson(options: {
 export async function runScriptSegment(
   input: ScriptSegmentInput,
 ): Promise<ScriptSegmentResult | null> {
-  const rawText = input.rawText.replace(/\s+/g, " ").trim();
-  if (rawText.length < 20) return null;
+  const rawText = input.rawText.replace(/\r\n/g, "\n").trim();
+  if (rawText.replace(/\s+/g, " ").length < 20) return null;
+  // Un recorte no es el libreto completo: el llamador debe completar con el parser local.
+  if (rawText.length > MAX_INPUT_CHARS) return null;
   const clipped: ScriptSegmentInput = {
     title: input.title,
-    rawText: rawText.slice(0, MAX_INPUT_CHARS),
+    rawText,
   };
 
   const provider = getRehearsalAiProvider();

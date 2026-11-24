@@ -1,6 +1,6 @@
 import { type ChangeEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Search,
@@ -26,6 +26,12 @@ import {
   Plus,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TopBar } from "@/components/TopBar";
 import { ScriptPipelineProgress } from "@/components/ScriptPipelineProgress";
 import { readScriptFile } from "@/lib/pdf-script";
@@ -75,6 +81,7 @@ function formatDialogueFromSetup(setup: ScriptSetup): string {
     blocks.push(scene.title);
     const lines = byScene.get(scene.id) ?? [];
     for (const line of lines) {
+      if (line.cue) blocks.push(`(${line.cue})`);
       const name = line.character?.name?.trim();
       blocks.push(name ? `${name}: ${line.text}` : line.text);
     }
@@ -131,6 +138,7 @@ function getScriptIcon(script: Pick<ScriptRecord, "title" | "genre"> | null) {
 
 function Libretos() {
   const queryClient = useQueryClient();
+  const nav = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const keepEditingRef = useRef(false);
   const [query, setQuery] = useState("");
@@ -228,6 +236,17 @@ function Libretos() {
   );
   const isTrash = Boolean(selectedScript?.deleted_at);
   const DetailIcon = getScriptIcon(selectedScript);
+
+  useEffect(() => {
+    if (!pasteOpen && !reviewOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPasteOpen(false);
+      setReviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pasteOpen, reviewOpen]);
 
   useEffect(() => {
     if (!selectedScript) return;
@@ -479,7 +498,11 @@ function Libretos() {
         return;
       }
 
-      toast.message("Gemini no devolvió escenas; se usa la detección local.");
+      toast.message(
+        draft.rawText.length > 14_000
+          ? "Gemini no cubre todo el texto; se completa con la detección local."
+          : "Gemini no devolvió escenas; se usa la detección local.",
+      );
       await runLocalPipelineFallback(draft);
     } catch {
       toast.message("Gemini no disponible o tardó demasiado; se usa la detección local.");
@@ -565,10 +588,11 @@ function Libretos() {
         lines: consolidateScriptLines(renamedSetup.lines),
       };
 
+      const normalizeDialogue = (value: string) => value.replace(/\r\n/g, "\n").trim();
       const originalDialogue = formatDialogueFromSetup(renamedSetup);
-      if (reviewDialogue.trim() !== originalDialogue.trim()) {
-        // Diálogo editado: reparseo local, sin volver a llamar a Gemini.
-        const script = await importScriptFromText(
+      if (normalizeDialogue(reviewDialogue) !== normalizeDialogue(originalDialogue)) {
+        // Diálogo editado de verdad: el mismo parser espacial, sin Gemini.
+        const reparsed = await executeScriptPipeline(
           {
             title: reviewTitle.trim() || setup.script?.title || "Libreto importado",
             author: setup.script?.author,
@@ -576,14 +600,18 @@ function Libretos() {
             description: setup.script?.description,
             rawText: reviewDialogue,
           },
-          { useAiSegment: false },
+          currentUserId,
         );
+        const script = saveLocalScriptSetup({
+          ...reparsed.setup,
+          lines: consolidateScriptLines(reparsed.setup.lines),
+        });
         refreshScripts();
         setSelectedId(script.id);
         setActiveTab("Mis libretos");
         setReviewOpen(false);
         setReviewResult(null);
-        toast.success(`Libreto guardado (${method}). Revisa personajes si hace falta.`);
+        toast.success(`Libreto guardado (${method}).`);
         return;
       }
 
@@ -876,6 +904,19 @@ function Libretos() {
                   }
                   favoriteMutation.mutate(script);
                 }}
+                onEdit={() => {
+                  setSelectedId(script.id);
+                  setEditing(true);
+                }}
+                onDuplicate={() => duplicateMutation.mutate(script.id)}
+                onRehearse={() => {
+                  activeMutation.mutate(script.id);
+                  void nav({
+                    to: "/configuracion-ensayo",
+                    search: { scriptId: script.id },
+                  });
+                }}
+                onTrash={() => deleteMutation.mutate(script.id)}
               />
             ))}
           </div>
@@ -1063,12 +1104,20 @@ function ScriptCard({
   compact,
   onSelect,
   onFavorite,
+  onEdit,
+  onDuplicate,
+  onRehearse,
+  onTrash,
 }: {
   script: ScriptRecord;
   active: boolean;
   compact: boolean;
   onSelect: () => void;
   onFavorite: (event: MouseEvent<HTMLButtonElement>) => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onRehearse: () => void;
+  onTrash: () => void;
 }) {
   const Icon = getScriptIcon(script);
 
@@ -1111,7 +1160,24 @@ function ScriptCard({
         <button onClick={onFavorite} className="text-primary p-1">
           <Star className={`w-4 h-4 ${script.is_favorite ? "fill-primary" : ""}`} />
         </button>
-        <MoreVertical className="w-4 h-4 text-muted-foreground" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Acciones del libreto"
+              className="p-1 text-muted-foreground hover:text-foreground"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+            <DropdownMenuItem onClick={onEdit}>Editar</DropdownMenuItem>
+            <DropdownMenuItem onClick={onDuplicate}>Duplicar</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRehearse}>Usar en ensayo</DropdownMenuItem>
+            <DropdownMenuItem onClick={onTrash}>Mover a papelera</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

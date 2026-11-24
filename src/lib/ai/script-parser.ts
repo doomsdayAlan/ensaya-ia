@@ -79,6 +79,8 @@ export interface GeometricScriptResult {
   allCharacters: string[];
   totalLines: number;
   usedOllamaOrBackend: boolean;
+  /** Primera línea significativa, si no es un encabezado de escena. */
+  workTitle?: string | null;
 }
 
 interface PdfFragment {
@@ -379,9 +381,11 @@ export async function extractGeometricLines(pdfBuffer: Uint8Array): Promise<RawP
       const maxColY = Math.max(leftTopY, rightTopY);
 
       // Encabezados superiores (títulos o acotaciones que abarcan ambas columnas en la parte superior)
+      // Solo el título que cruza el canal y está por encima de las columnas.
+      // El primer bloque de la columna izquierda (p. ej. MADRE) no es encabezado.
       const headerFragments = [
-        ...straddlingWide.filter((f) => f.y >= maxColY - 15),
-        ...normalFrags.filter((f) => f.y > maxColY + 15),
+        ...straddlingWide.filter((f) => f.y > maxColY + 8 && f.width >= pageWidth * 0.45),
+        ...normalFrags.filter((f) => f.y > maxColY + 18 && f.width >= pageWidth * 0.45),
       ];
 
       const leftColumnFragments = leftItems.filter((f) => !headerFragments.includes(f));
@@ -839,6 +843,7 @@ export function parseGeometricScript(
   };
 
   let currentCharacter: string | null = null;
+  let collectiveCue: string | null = null;
   let inParenthetical = false;
   let currentParenthetical = "";
   let inSceneNote = false;
@@ -937,9 +942,30 @@ export function parseGeometricScript(
       continue;
     }
 
+    // D0. «PRIMER ACTO - ESCENA n» es una escena de ese acto, no un acto nuevo.
+    const actAndScene = text.match(
+      /^(PRIMER\s+ACTO|SEGUNDO\s+ACTO|TERCER\s+ACTO|CUARTO\s+ACTO|QUINTO\s+ACTO|SEXTO\s+ACTO|ACTO\s+(?:[IVXLCDM]+|\d+))\s*[-—,:]\s*((?:ESCENA|CUADRO)\s+.+)$/i,
+    );
+    if (actAndScene) {
+      currentActTitle = actAndScene[1].replace(/\s+/g, " ").trim().toUpperCase();
+      const scenePart = actAndScene[2].replace(/[:.\-—]+$/, "").trim();
+      commitSceneIfHasLines();
+      currentScene = {
+        id: `scene-${scenes.length + 1}`,
+        title: `${currentActTitle} - ${scenePart}`,
+        actTitle: currentActTitle,
+        lines: [],
+        characters: [],
+        description: "",
+      };
+      currentCharacter = null;
+      inSceneNote = false;
+      continue;
+    }
+
     // D. Detección de Acto
-    if (ACT_HEADING_RE.test(text)) {
-      currentActTitle = text.replace(/[:\.\-—]+$/, "").trim();
+    if (ACT_HEADING_RE.test(text) && !SCENE_HEADING_RE.test(text)) {
+      currentActTitle = text.replace(/[:.\-—]+$/, "").trim();
       commitSceneIfHasLines();
       currentScene = {
         id: `scene-${scenes.length + 1}`,
@@ -1091,6 +1117,24 @@ export function parseGeometricScript(
         .trim()
         .toUpperCase();
       if (!STAGE_BLACKLIST.has(rawCandidate) && rawCandidate.length >= 2) {
+        if (/^(?:TODOS|TODAS)(?:\s+L[OA]S\s+PRESENTES)?$/.test(rawCandidate)) {
+          collectiveCue = rawCandidate;
+          currentCharacter = null;
+          const dialogueText = inlineMatch[3]?.trim();
+          if (dialogueText) {
+            currentScene.lines.push({
+              id: `line-${++lineCounter}`,
+              type: "dialogo",
+              parenthetical: rawCandidate,
+              text: dialogueText,
+              page: rawLine.page,
+              x: rawLine.x,
+              y: rawLine.y,
+            });
+          }
+          continue;
+        }
+        collectiveCue = null;
         const { rectifiedName } = rectifyCharacterCandidate(
           rawCandidate,
           explicitCast,
@@ -1132,6 +1176,13 @@ export function parseGeometricScript(
         .replace(/\([^)]+\)/g, "")
         .trim()
         .toUpperCase();
+
+      if (/^(?:TODOS|TODAS)(?:\s+L[OA]S\s+PRESENTES)?$/.test(rawCandidate)) {
+        collectiveCue = rawCandidate;
+        currentCharacter = null;
+        continue;
+      }
+      collectiveCue = null;
 
       if (rawCandidate.length >= 2 && !STAGE_BLACKLIST.has(rawCandidate)) {
         const { rectifiedName } = rectifyCharacterCandidate(
@@ -1186,6 +1237,19 @@ export function parseGeometricScript(
     }
 
     // J. Diálogo perteneciente al personaje activo (unir de corrido parlamentos continuos)
+    if (!currentCharacter && collectiveCue) {
+      currentScene.lines.push({
+        id: `line-${++lineCounter}`,
+        type: "dialogo",
+        parenthetical: collectiveCue,
+        text,
+        page: rawLine.page,
+        x: rawLine.x,
+        y: rawLine.y,
+      });
+      continue;
+    }
+
     if (currentCharacter) {
       const lastLine = currentScene.lines[currentScene.lines.length - 1];
       if (lastLine && lastLine.type === "dialogo" && lastLine.characterName === currentCharacter) {
@@ -1206,6 +1270,27 @@ export function parseGeometricScript(
   }
 
   commitSceneIfHasLines();
+
+  const soloNames = new Set(
+    scenes.flatMap((scene) => scene.characters).filter((name) => !name.includes(" Y ")),
+  );
+  for (const scene of scenes) {
+    for (const line of scene.lines) {
+      const name = line.characterName?.toUpperCase();
+      if (!name || !name.includes(" Y ")) continue;
+      const parts = name.split(/\s+Y\s+/);
+      if (!parts.every((part) => soloNames.has(part) || explicitCast.has(part))) continue;
+      line.parenthetical = line.parenthetical ? `${name} · ${line.parenthetical}` : name;
+      line.characterName = parts[0];
+    }
+    scene.characters = Array.from(
+      new Set(
+        scene.lines
+          .map((line) => line.characterName)
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+  }
 
   // Escena de respaldo si no hubo líneas agrupadas
   if (scenes.length === 0) {
@@ -1236,11 +1321,19 @@ export function parseGeometricScript(
     })
     .filter((name) => {
       if (STAGE_BLACKLIST.has(name)) return false;
+      if (/^(?:TODOS|TODAS)(?:\s+L[OA]S\s+PRESENTES)?$/.test(name)) return false;
 
-      // Descartar quimeras compuestas como "JOVEN 1 Y JOVEN 2" o "GENARO Y LUPERCIO"
+      // «A Y B» no es un personaje si las partes ya existen, ni un coro compuesto.
       if (name.includes(" Y ")) {
         const parts = name.split(/\s+Y\s+/);
-        if (parts.every((p) => knownCharacters.has(p) || explicitCast.has(p))) {
+        if (
+          parts.every(
+            (p) =>
+              knownCharacters.has(p) ||
+              explicitCast.has(p) ||
+              scenes.some((s) => s.characters.includes(p)),
+          )
+        ) {
           return false;
         }
       }
@@ -1265,5 +1358,6 @@ export function parseGeometricScript(
     allCharacters: cleanCharacters,
     totalLines,
     usedOllamaOrBackend: false,
+    workTitle: initialTitle && initialTitle !== "Escena 1 (Inicio)" ? initialTitle : null,
   };
 }

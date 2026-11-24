@@ -35,16 +35,15 @@ export interface ParsedScriptDraft {
 
 /** Encabezado = la linea ENTERA es ACTO/ESCENA/CUADRO o INT./EXT. */
 const SCENE_HEADING_RE =
-  /^(?:(ACTO\s+[IVXLC\d]+.*)|(ESCENA\s+[IVXLC\d]+.*)|(CUADRO\s+[IVXLC\d]+.*)|((?:INT|EXT|INT\.\/EXT\.)[\.\s].*))$/i;
+  /^(?:(ACTO\s+[IVXLC\d]+.*)|(ESCENA\s+[IVXLC\d]+.*)|(CUADRO\s+[IVXLC\d]+.*)|((?:INT|EXT|INT\.\/EXT\.)[.\s].*))$/i;
 
 const SCENE_HEADER_ONLY_RE =
   /^(?:ACTO|ESCENA|Acto|Escena)(?:\s+(?:\d+|[IVXLCDM]+|PRIMERO|SEGUNDO|TERCERO|CUARTO|QUINTO|SEXTO|SEPTIMO|SÉPTIMO|OCTAVO|NOVENO|DECIMO|DÉCIMO|UNICO|ÚNICO|[A-ZÁÉÍÓÚÑ]{1,16}))?\s*$/i;
 
 const INLINE_DIALOGUE_RE =
-  /^([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ0-9\s\.\-]{1,32}?)(?:\s*\(([^)]+)\))?\s*[:\.\-—]+\s+(.+)$/;
+  /^([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ0-9\s.-]{1,32}?)(?:\s*\(([^)]+)\))?\s*[:.—-]+\s+(.+)$/;
 
-const STANDALONE_CUE_RE =
-  /^([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ0-9\s\.\-]{1,32}?)(?:\s*\(([^)]+)\))?\s*:?$/;
+const STANDALONE_CUE_RE = /^([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ0-9\s.-]{1,32}?)(?:\s*\(([^)]+)\))?\s*:?$/;
 
 /**
  * Normaliza el nombre de un personaje: elimina acotaciones de tipo V.O., O.S., etc.
@@ -53,7 +52,7 @@ const STANDALONE_CUE_RE =
 export function cleanCharacterName(value: string): string {
   return value
     .replace(/\((?:V\.?O\.?|O\.?S\.?|OFF|CONT'?D|CONTINÚA|VOZ|EN OFF)\)/gi, "")
-    .replace(/[:.\-–—]/g, " ")
+    .replace(/[:.–—-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -61,7 +60,7 @@ export function cleanCharacterName(value: string): string {
 function cleanCharacterCue(raw: string): string {
   return raw
     .replace(/\((?:V\.?O\.?|O\.?S\.?|OFF|CONT'?D|CONTINÚA|VOZ|EN OFF)\)/gi, "")
-    .replace(/[:\.\-—]+$/, "")
+    .replace(/[:.—-]+$/, "")
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
@@ -138,7 +137,10 @@ export function parseScriptText(
   const aliasMap = aliasOverride ?? cpuDetection.alias_map;
   const discardedSet = discardedOverride ?? new Set(cpuDetection.discarded);
 
-  const lines = rawText.replace(/\r\n/g, "\n").split("\n").map((l) => l.trim());
+  const lines = rawText
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim());
 
   let actsCount = 0;
   const scenes: ParsedScriptScene[] = [];
@@ -219,13 +221,7 @@ export function parseScriptText(
 
     // 5. Línea de parlamento asociada al personaje activo
     if (currentCharacter) {
-      appendDialogueLine(
-        currentScene,
-        ++lineCounter,
-        currentCharacter,
-        line,
-        currentParenthetical,
-      );
+      appendDialogueLine(currentScene, ++lineCounter, currentCharacter, line, currentParenthetical);
       currentParenthetical = undefined;
     }
   }
@@ -236,9 +232,7 @@ export function parseScriptText(
     scenes.push(currentScene);
   }
 
-  const allCharacters = Array.from(
-    new Set(scenes.flatMap((s) => s.characters)),
-  );
+  const allCharacters = Array.from(new Set(scenes.flatMap((s) => s.characters)));
 
   return {
     title: defaultTitle,
@@ -270,9 +264,11 @@ export async function parseScriptTextWithTinyLLM(
  * Convierte un ParsedScriptDraft en grupos de escenas compatibles con ImportedSceneGroup
  * para la persistencia local o remota.
  */
-export function parsedDraftToSceneGroups(
-  draft: ParsedScriptDraft,
-): Array<{ title: string; location?: string | null; lines: Array<{ characterName: string | null; text: string }> }> {
+export function parsedDraftToSceneGroups(draft: ParsedScriptDraft): Array<{
+  title: string;
+  location?: string | null;
+  lines: Array<{ characterName: string | null; text: string }>;
+}> {
   return draft.scenes.map((scene) => ({
     title: scene.title,
     lines: scene.lines.map((l) => ({

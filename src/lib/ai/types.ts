@@ -33,6 +33,7 @@ export type ScriptSegmentInput = {
 export type SegmentedScriptLine = {
   characterName: string | null;
   text: string;
+  cue?: string | null;
 };
 
 export type SegmentedScriptScene = {
