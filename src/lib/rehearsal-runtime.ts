@@ -83,6 +83,17 @@ export type LocalRehearsalReport = {
   feedback: string;
   feedbackSource?: string;
   lineNotes?: RehearsalLineNote[];
+  interpretation?: {
+    disclaimer: string;
+    notice: string | null;
+    lines: Array<{
+      lineId: string;
+      detectedExpressions: Array<{ name: string; score: number }>;
+      expectedEmotion: string;
+      alignment: string;
+      tips: string;
+    }>;
+  } | null;
 };
 
 export type ReportContext = {

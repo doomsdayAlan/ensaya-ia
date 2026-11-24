@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
   if (env.GROQ_MODEL) process.env.GROQ_MODEL ??= env.GROQ_MODEL;
   if (env.OPENAI_MODEL) process.env.OPENAI_MODEL ??= env.OPENAI_MODEL;
   if (env.AI_TIMEOUT_MS) process.env.AI_TIMEOUT_MS ??= env.AI_TIMEOUT_MS;
+  if (env.INTERPRETATION_TIMEOUT_MS) {
+    process.env.INTERPRETATION_TIMEOUT_MS ??= env.INTERPRETATION_TIMEOUT_MS;
+  }
+  if (env.HUME_API_KEY) process.env.HUME_API_KEY ??= env.HUME_API_KEY;
+  if (env.ELEVENLABS_API_KEY) process.env.ELEVENLABS_API_KEY ??= env.ELEVENLABS_API_KEY;
 
   return {
     server: {

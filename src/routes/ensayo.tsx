@@ -22,6 +22,13 @@ import {
   type ScriptLineWithCharacter,
 } from "@/lib/rehearsal-data";
 import { requestRehearsalFeedback } from "@/lib/ai/request-rehearsal-feedback";
+import { requestInterpretationAdvice } from "@/lib/ai/request-interpretation-advice";
+import { collectInterpretationTakes } from "@/lib/ai/collect-interpretation-takes";
+import {
+  INTERPRETATION_DISCLAIMER,
+  TERMS_VERSION,
+  shouldRequestInterpretation,
+} from "@/lib/ai/interpretation";
 import {
   buildFeedback,
   canUseSpeechRecognition,
@@ -503,6 +510,73 @@ function Ensayo() {
       }
     }
 
+    let interpretation: {
+      disclaimer: string;
+      notice: string | null;
+      lines: Array<{
+        lineId: string;
+        detectedExpressions: Array<{ name: string; score: number }>;
+        expectedEmotion: string;
+        alignment: string;
+        tips: string;
+      }>;
+    } | null = null;
+    const profile = profileData?.profile;
+    const takeScriptId = activeConfig?.scriptId ?? setup?.script?.id ?? latest?.script_id ?? null;
+    const takeSceneId = activeConfig?.sceneId ?? setup?.scene?.id ?? latest?.scene_id ?? null;
+    const takeGroupId = isGrupoMode ? grupoId : INDIVIDUAL_TAKE_GROUP;
+    const spokenByLine = new Map(
+      lineNotesRef.current.map((note) => [note.lineId, note.spoken ?? ""]),
+    );
+    const interpretationLines = lines
+      .filter((line) => line.character_id && humanCharacterIds.has(line.character_id))
+      .map((line) => ({
+        lineId: line.id,
+        text: line.text,
+        cue: line.cue ?? "",
+        baseEmotion: line.character?.base_emotion ?? "",
+        spoken: spokenByLine.get(line.id) ?? "",
+      }));
+    const wantsInterpretation =
+      Boolean(takeScriptId && takeGroupId && profile?.user_id && profile.user_id !== "guest") &&
+      shouldRequestInterpretation({
+        mode,
+        termsAccepted: profile?.terms_version === TERMS_VERSION,
+        audioEnabled: profile?.interpretation_audio_enabled !== false,
+        offline: isOfflineMode(),
+        hasTakes: interpretationLines.length > 0,
+      });
+    if (wantsInterpretation && takeScriptId && takeGroupId && profile?.user_id) {
+      try {
+        const collected = await collectInterpretationTakes({
+          scriptId: takeScriptId,
+          sceneId: takeSceneId,
+          grupoId: takeGroupId,
+          userId: profile.user_id,
+          lines: interpretationLines,
+        });
+        if (collected.takes.length > 0) {
+          const result = await requestInterpretationAdvice({ data: { takes: collected.takes } });
+          interpretation = result.advice ?? null;
+          if (interpretation && collected.notice && !interpretation.notice) {
+            interpretation = { ...interpretation, notice: collected.notice };
+          }
+        } else if (collected.notice) {
+          interpretation = {
+            disclaimer: INTERPRETATION_DISCLAIMER,
+            notice: collected.notice,
+            lines: [],
+          };
+        }
+      } catch {
+        interpretation = {
+          disclaimer: INTERPRETATION_DISCLAIMER,
+          notice: "No hubo consejos de interpretación.",
+          lines: [],
+        };
+      }
+    }
+
     try {
       saveLocalReport(
         {
@@ -527,6 +601,7 @@ function Ensayo() {
           feedback,
           feedbackSource: !isLectura && isOfflineMode() ? "offline-template" : feedbackSource,
           lineNotes: [...lineNotesRef.current],
+          interpretation,
         },
         {
           script: setup?.script ?? null,

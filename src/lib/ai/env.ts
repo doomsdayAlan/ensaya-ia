@@ -20,6 +20,16 @@ export function geminiModel() {
   return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-2.5-flash";
 }
 
+/** Análisis de audio. No hereda el modelo viejo del importador de libretos. */
+export function interpretationModel() {
+  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-3.5-flash-lite";
+}
+
+export function interpretationTimeoutMs() {
+  const raw = Number(readEnv("INTERPRETATION_TIMEOUT_MS") || "30000");
+  return Number.isFinite(raw) && raw >= 5000 ? Math.min(raw, 90_000) : 30_000;
+}
+
 export function groqApiKey() {
   return readEnv("GROQ_API_KEY");
 }

@@ -254,6 +254,11 @@ function Finalizado() {
                       style={{ width: `${score.value}%` }}
                     />
                   </div>
+                  {score.label === "Expresion" ? (
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Esta barra no analiza el audio.
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -265,6 +270,15 @@ function Finalizado() {
             sourceLabel={feedbackSourceLabel(localReport?.feedbackSource)}
             className="mt-4"
           />
+          {localReport?.interpretation ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {localReport.interpretation.disclaimer}{" "}
+              {localReport.interpretation.notice ??
+                (localReport.interpretation.lines.length > 0
+                  ? "El detalle de cada línea está en el reporte detallado."
+                  : "No hubo consejos de interpretación.")}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -364,6 +378,9 @@ function Finalizado() {
               ))}
             </div>
           )}
+          {reviewPanel === "detail" && localReport?.interpretation ? (
+            <InterpretationDetail block={localReport.interpretation} notes={lineNotes} />
+          ) : null}
           {(reviewPanel === "errors" ? errorNotes : lineNotes).length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {reviewPanel === "errors"
@@ -445,6 +462,56 @@ function Finalizado() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function InterpretationDetail({
+  block,
+  notes,
+}: {
+  block: NonNullable<LocalRehearsalReport["interpretation"]>;
+  notes: NonNullable<LocalRehearsalReport["lineNotes"]>;
+}) {
+  const byId = new Map(notes.map((note) => [note.lineId, note]));
+  return (
+    <div className="mb-4 space-y-3">
+      <h4 className="text-sm font-medium">Consejos de interpretación (orientativos)</h4>
+      <p className="text-xs text-muted-foreground">{block.disclaimer}</p>
+      {block.notice ? <p className="text-xs text-muted-foreground">{block.notice}</p> : null}
+      {block.lines.map((line) => {
+        const note = byId.get(line.lineId);
+        return (
+          <div
+            key={line.lineId}
+            className="rounded-lg border border-border/50 bg-surface p-3 text-sm"
+          >
+            <p className="text-foreground/90">{note?.text ?? "Línea del ensayo"}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Emoción esperada: {line.expectedEmotion}
+            </p>
+            {line.detectedExpressions.length === 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Esta línea no tuvo audio suficiente para detectar expresiones.
+              </p>
+            ) : (
+              <ul className="mt-1 text-xs text-muted-foreground">
+                {line.detectedExpressions.map((item) => (
+                  <li key={`${line.lineId}-${item.name}`}>
+                    {item.name} · {Math.round(item.score * 100)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {line.alignment === "sin_audio" ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No se analizó audio de esta línea.
+              </p>
+            ) : null}
+            {line.tips ? <p className="mt-2 text-sm">{line.tips}</p> : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
