@@ -843,7 +843,7 @@ function Ensayo() {
       toast.error(speechBrowserHint());
     }
 
-    if (isRehearsing && isMyTurn) {
+    if (isRehearsing && isHumanTurn) {
       const verdict = evaluateSpokenLine(transcript, currentLine?.text ?? "", matchDifficulty);
       if (verdict.score >= matchThreshold(matchDifficulty) * 0.75) {
         advance({ score: verdict.score });
@@ -869,12 +869,12 @@ function Ensayo() {
 
   const handleSkipForward = () => {
     if (activeLineIndex >= lines.length - 1) {
-      recordLineNote(currentLine, { skipped: isMyTurn && !isLecturaMode });
-      if (isMyTurn && !isLecturaMode) skippedRef.current += 1;
+      recordLineNote(currentLine, { skipped: isHumanTurn && !isLecturaMode });
+      if (isHumanTurn && !isLecturaMode) skippedRef.current += 1;
       void finishRehearsal("done");
       return;
     }
-    advance({ skipped: isMyTurn && !isLecturaMode });
+    advance({ skipped: isHumanTurn && !isLecturaMode });
   };
 
   const handleSkipBackward = () => {
@@ -905,7 +905,7 @@ function Ensayo() {
   };
 
   const submitTypedLine = () => {
-    if (!isRehearsing || !isMyTurn || !currentLine || isLecturaMode) return;
+    if (!isRehearsing || !isHumanTurn || !currentLine || isLecturaMode) return;
     const text = typedLine.trim();
     if (!text) return;
     applySpokenText(text, true);
@@ -978,7 +978,7 @@ function Ensayo() {
             line={currentLine}
             selectedCharacterId={selectedCharacterId}
             active
-            speaking={isSpeaking && !isMyTurn}
+            speaking={isSpeaking && !isHumanTurn}
           />
           <LineCard
             title="Siguiente línea"
@@ -1060,9 +1060,11 @@ function Ensayo() {
                     ? isRehearsing
                       ? "Detener lectura"
                       : "Iniciar lectura"
-                    : isRehearsing
-                      ? "Detener ensayo"
-                      : "Iniciar ensayo con micrófono"
+                    : isRehearsing && isHumanTurn
+                      ? "Evaluar la línea y avanzar"
+                      : isRehearsing
+                        ? "Detener ensayo"
+                        : "Iniciar ensayo con micrófono"
                 }
                 className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 transition-all ${
                   isRehearsing
@@ -1089,7 +1091,7 @@ function Ensayo() {
                 <div className="mt-1 flex gap-2">
                   <input
                     value={typedLine}
-                    disabled={!isRehearsing || !isMyTurn}
+                    disabled={!isRehearsing || !isHumanTurn}
                     onChange={(event) => setTypedLine(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
@@ -1098,17 +1100,17 @@ function Ensayo() {
                       }
                     }}
                     placeholder={
-                      isRehearsing && isMyTurn
+                      isRehearsing && isHumanTurn
                         ? "Di la línea o escríbela aquí y pulsa Enter"
                         : isRehearsing
-                          ? "Espera a tu turno o usa siguiente línea"
-                          : "Pulsa el micrófono para empezar"
+                          ? "Espera el turno de una persona o usa siguiente línea"
+                          : "Pulsa el botón redondo para empezar"
                     }
                     className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
                   />
                   <button
                     type="button"
-                    disabled={!isRehearsing || !isMyTurn || !typedLine.trim()}
+                    disabled={!isRehearsing || !isHumanTurn || !typedLine.trim()}
                     onClick={submitTypedLine}
                     className="inline-flex items-center gap-2 border border-primary/40 text-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
                   >
@@ -1136,7 +1138,7 @@ function Ensayo() {
                 <CharRow
                   key={character.id}
                   icon={character.id === selectedCharacter?.id ? Crown : Drama}
-                  name={`${character.name}${character.id === selectedCharacter?.id ? " (Tú)" : " (voz)"}`}
+                  name={`${character.name} (${rehearsalRoleLabel(character.actor_type, character.id, selectedCharacterId)})`}
                   status={character.id === currentLine?.character_id ? "Activo" : "En espera"}
                   muted={character.id === selectedCharacter?.id}
                   playing={isRehearsing && character.id === currentLine?.character_id}
@@ -1153,7 +1155,13 @@ function Ensayo() {
             <Quick
               label="Turno actual"
               value={
-                isLecturaMode ? "Lectura en voz alta" : isMyTurn ? "Tu turno" : "Voz del navegador"
+                isLecturaMode
+                  ? "Lectura en voz alta"
+                  : turnLabel === "Tú"
+                    ? "Tu turno"
+                    : turnLabel
+                      ? `Turno de ${turnLabel}`
+                      : "Voz del navegador"
               }
             />
             <Quick
@@ -1223,6 +1231,16 @@ function Ensayo() {
   );
 }
 
+function rehearsalRoleLabel(
+  actorType: string | null | undefined,
+  characterId: string | null | undefined,
+  selectedCharacterId: string | null,
+) {
+  if (actorType === "user" || (characterId && characterId === selectedCharacterId)) return "Tú";
+  if (actorType?.startsWith("actor-")) return `Actor ${actorType.slice("actor-".length)}`;
+  return "voz";
+}
+
 function LineCard({
   title,
   line,
@@ -1238,8 +1256,12 @@ function LineCard({
   faded?: boolean;
   speaking?: boolean;
 }) {
-  const isUserLine = line?.character_id === selectedCharacterId;
-  const tone = isUserLine ? "text-primary" : "text-success";
+  const role = rehearsalRoleLabel(
+    line?.character?.actor_type,
+    line?.character_id,
+    selectedCharacterId,
+  );
+  const tone = role === "Tú" ? "text-primary" : role === "voz" ? "text-success" : "text-foreground";
 
   return (
     <div>
@@ -1258,7 +1280,7 @@ function LineCard({
           <>
             <div className="flex items-center gap-2 mb-2">
               <span className={`text-sm font-semibold ${tone}`}>
-                {line.character?.name.toUpperCase() ?? "NARRADOR"} {isUserLine ? "(Tú)" : "(voz)"}
+                {line.character?.name.toUpperCase() ?? "NARRADOR"} ({role})
               </span>
               <Wave active={Boolean(active && speaking)} />
               {!active && (
