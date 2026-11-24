@@ -117,6 +117,39 @@ assert(
 );
 assert(columns.includes("Buenos días."), "el primer parlamento de la izquierda no se pierde");
 
+const cover = linesOf([
+  "GUION TEATRAL",
+  "“TU MENTIRA”",
+  "COMISIÓN NACIONAL DE LOS DERECHOS HUMANOS",
+  "OCTUBRE, 2019",
+  "PRIMER ACTO - ESCENA 1",
+  "MADRE",
+  "Hola.",
+  "PRIMER ACTO - ESCENA 2",
+  "(Pausa)",
+  "PRIMER ACTO - ESCENA 3",
+  "MADRE",
+  "Sigue.",
+]);
+const covered = parseGeometricScript(cover, calibrateSpatiallyByHeuristics(cover));
+assert(
+  covered.workTitle === "TU MENTIRA",
+  `titulo de la obra, no el rotulo (${covered.workTitle})`,
+);
+assert(
+  !covered.scenes.some((scene) => scene.title.includes("ESCENA 2")),
+  `no persiste la escena vacía (${covered.scenes.map((scene) => scene.title).join(" | ")})`,
+);
+const follows = covered.scenes.find((scene) => scene.title.includes("ESCENA 3"));
+assert(
+  Boolean(follows?.lines.some((line) => line.type === "dialogo" && line.text.includes("Sigue"))),
+  "el parlamento siguiente se conserva",
+);
+assert(
+  Boolean(follows?.lines.some((line) => line.text.includes("Pausa"))),
+  "la acotación de la escena vacía pasa a la siguiente",
+);
+
 if (failed) {
   console.error(`PARSER TESTS FAILED: ${failed}`);
   process.exit(1);

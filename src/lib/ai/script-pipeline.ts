@@ -268,9 +268,15 @@ export async function executeScriptPipeline(
     charactersPerScene[scRecord.title] = Array.from(sceneCharactersSet);
   }
 
+  const spokenSceneIds = new Set(lines.map((line) => line.scene_id));
+  const keptScenes = scenes
+    .filter((scene) => spokenSceneIds.has(scene.id))
+    .map((scene, index) => ({ ...scene, sort_order: index + 1 }));
+
   // 4. Conteo de actos distintos (no una entrada por escena).
   const distinctActs = new Set(
     geometricResult.scenes
+      .filter((scene) => scene.lines.some((line) => line.type === "dialogo" && line.text.trim()))
       .map((scene) => scene.actTitle?.replace(/\s+/g, " ").trim().toUpperCase())
       .filter((title): title is string => Boolean(title)),
   );
@@ -287,7 +293,7 @@ export async function executeScriptPipeline(
     act_count: actsCount,
     description:
       draft.description?.trim() ||
-      `Libreto procesado con Parser Espacial + TinyLLM (${scenes.length} escenas, ${characters.length} personajes).`,
+      `Libreto procesado con Parser Espacial + TinyLLM (${keptScenes.length} escenas, ${characters.length} personajes).`,
     is_favorite: false,
     is_active: false,
     is_public: false,
@@ -303,8 +309,8 @@ export async function executeScriptPipeline(
 
   const setup: ScriptSetup = {
     script,
-    scenes,
-    scene: scenes[0] ?? null,
+    scenes: keptScenes,
+    scene: keptScenes[0] ?? null,
     characters,
     lines: consolidatedLines,
   };
@@ -312,7 +318,7 @@ export async function executeScriptPipeline(
   onProgress?.({
     step: 5,
     totalSteps: 5,
-    message: `¡Pipeline completado! ${scenes.length} escenas y ${characters.length} personajes listos para ensayar.`,
+    message: `¡Pipeline completado! ${keptScenes.length} escenas y ${characters.length} personajes listos para ensayar.`,
     stage: "done",
   });
 
@@ -320,7 +326,7 @@ export async function executeScriptPipeline(
     setup,
     stats: {
       actsCount,
-      scenesCount: scenes.length,
+      scenesCount: keptScenes.length,
       charactersCount: characters.length,
       linesCount: consolidatedLines.length,
       charactersPerScene,

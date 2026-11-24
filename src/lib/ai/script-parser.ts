@@ -815,6 +815,40 @@ const SCENE_HEADING_RE =
 const ACT_HEADING_RE =
   /^(?:ACTO\s+(?:[IVXLCDM\d]+|PRIMERO|SEGUNDO|TERCERO|CUARTO|QUINTO|SEXTO|SÉPTIMO|SEPTIMO|OCTAVO|NOVENO|DÉCIMO|DECIMO)|PRIMER\s+ACTO|SEGUNDO\s+ACTO|TERCER\s+ACTO|JORNADA\s+(?:[IVXLCDM\d]+|PRIMERA|SEGUNDA|TERCERA)|PRÓLOGO|PROLOGO|EPÍLOGO|EPILOGO)\b/i;
 
+const GENERIC_COVER_RE =
+  /^(?:GUION(?:\s+TEATRAL)?|GUIÓN(?:\s+TEATRAL)?|OBRA(?:\s+DE\s+TEATRO)?|TEXTO\s+TEATRAL|LIBRETO|PERSONAJES|REPARTO|ELENCO|DRAMATIS\s+PERSONAE|CONTENIDO|INTRODUCCI[OÓ]N|PR[OÓ]LOGO|PROLOGO|EDICI[OÓ]N|PRIMERA\s+EDICI[OÓ]N|COPYRIGHT|ISBN|DERECHOS\s+RESERVADOS|AUTOR|ADAPTACI[OÓ]N)[:\s]*$/i;
+
+function looksLikeDateOrInstitution(text: string) {
+  return (
+    /^(?:\d{1,2}\s+de\s+)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s*,?\s*\d{4})?$/i.test(
+      text,
+    ) ||
+    /^\d{4}$/.test(text) ||
+    /comisi[oó]n|universidad|secretar[ií]a|ministerio|instituto|derechos humanos|ayuntamiento|gobierno/i.test(
+      text,
+    )
+  );
+}
+
+/** Primera línea que parece título de la obra, no el rótulo editorial de la portada. */
+export function proposeWorkTitle(lines: RawPdfLine[]): string | null {
+  for (const line of lines.slice(0, 40)) {
+    const raw = line.text.trim();
+    if (!raw || raw.length > 80) continue;
+    if (METADATA_OR_HEADER_RE.test(raw)) continue;
+    const bare = raw
+      .replace(/^["“«']+|["”»']+$/g, "")
+      .replace(/\.$/, "")
+      .trim();
+    if (bare.length < 2 || bare.length > 60) continue;
+    if (GENERIC_COVER_RE.test(bare) || looksLikeDateOrInstitution(bare)) continue;
+    if (ACT_HEADING_RE.test(bare) || SCENE_HEADING_RE.test(bare)) continue;
+    if (/^\d+$/.test(bare)) continue;
+    return bare;
+  }
+  return null;
+}
+
 export function parseGeometricScript(
   lines: RawPdfLine[],
   rules: ScriptRules,
@@ -826,13 +860,8 @@ export function parseGeometricScript(
   const explicitCast = extractExplicitCastList(lines);
   const knownCharacters = new Set<string>(explicitCast);
 
-  // Título inicial por defecto (si la primera línea es un título de obra, se usará)
-  const initialTitle =
-    lines.length > 0 &&
-    lines[0].text.length <= 40 &&
-    !STAGE_BLACKLIST.has(lines[0].text.toUpperCase())
-      ? lines[0].text.replace(/\.$/, "").trim()
-      : "Escena 1 (Inicio)";
+  const workTitle = proposeWorkTitle(lines);
+  const initialTitle = workTitle ?? "Escena 1 (Inicio)";
 
   let currentScene: ParsedGeometricScene = {
     id: `scene-1`,
@@ -1271,6 +1300,25 @@ export function parseGeometricScript(
 
   commitSceneIfHasLines();
 
+  const foldedScenes: ParsedGeometricScene[] = [];
+  let carriedNotes: ParsedGeometricLine[] = [];
+  for (const scene of scenes) {
+    const hasDialogue = scene.lines.some((line) => line.type === "dialogo" && line.text.trim());
+    if (!hasDialogue) {
+      carriedNotes.push(...scene.lines);
+      continue;
+    }
+    if (carriedNotes.length > 0) {
+      scene.lines = [...carriedNotes, ...scene.lines];
+      carriedNotes = [];
+    }
+    foldedScenes.push(scene);
+  }
+  if (carriedNotes.length > 0 && foldedScenes.length > 0) {
+    foldedScenes[foldedScenes.length - 1].lines.push(...carriedNotes);
+  }
+  scenes.splice(0, scenes.length, ...foldedScenes);
+
   const soloNames = new Set(
     scenes.flatMap((scene) => scene.characters).filter((name) => !name.includes(" Y ")),
   );
@@ -1358,6 +1406,6 @@ export function parseGeometricScript(
     allCharacters: cleanCharacters,
     totalLines,
     usedOllamaOrBackend: false,
-    workTitle: initialTitle && initialTitle !== "Escena 1 (Inicio)" ? initialTitle : null,
+    workTitle,
   };
 }
