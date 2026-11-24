@@ -1,6 +1,7 @@
 /**
  * Sesion en localStorage; cuentas y perfil en IndexedDB (ver user-database.ts).
  */
+import { TERMS_VERSION } from "@/lib/ai/interpretation";
 import type { PerfilUsuarioRecord } from "@/lib/rehearsal-data";
 import { getDemoScriptSetup } from "@/lib/demo-script";
 import { duplicateLocalSetup, listLocalScripts } from "@/lib/local-library";
@@ -113,6 +114,10 @@ function profileFromStored(row: StoredProfile): PerfilUsuarioRecord {
     feedback_enabled: Boolean(row.feedback_enabled),
     notifications_enabled: Boolean(row.notifications_enabled),
     offline_mode_enabled: Boolean(row.offline_mode_enabled),
+    terms_accepted_at: row.terms_accepted_at ?? null,
+    terms_version: row.terms_version ?? null,
+    interpretation_audio_enabled:
+      row.interpretation_audio_enabled == null ? true : Boolean(row.interpretation_audio_enabled),
     privacy_level: row.privacy_level,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -133,6 +138,9 @@ function storedFromProfile(profile: PerfilUsuarioRecord): StoredProfile {
     feedback_enabled: profile.feedback_enabled ? 1 : 0,
     notifications_enabled: profile.notifications_enabled ? 1 : 0,
     offline_mode_enabled: profile.offline_mode_enabled ? 1 : 0,
+    terms_accepted_at: profile.terms_accepted_at ?? null,
+    terms_version: profile.terms_version ?? null,
+    interpretation_audio_enabled: profile.interpretation_audio_enabled === false ? 0 : 1,
     privacy_level: profile.privacy_level,
     created_at: profile.created_at,
     updated_at: profile.updated_at,
@@ -223,7 +231,12 @@ export async function registerLocalAccount({
   };
 
   await insertUser(account);
-  const storedProfile = defaultStoredProfile(account);
+  const storedProfile = {
+    ...defaultStoredProfile(account),
+    terms_accepted_at: now,
+    terms_version: TERMS_VERSION,
+    interpretation_audio_enabled: 1,
+  };
   await upsertProfile(storedProfile);
   saveLocalProfile(profileFromStored(storedProfile));
   persistSession({
@@ -342,6 +355,15 @@ function readProfiles() {
 
 export function loadLocalProfile(userId: string): PerfilUsuarioRecord | null {
   return readProfiles()[userId] ?? null;
+}
+
+export function acceptCurrentTerms(profile: PerfilUsuarioRecord) {
+  return saveLocalProfile({
+    ...profile,
+    terms_accepted_at: new Date().toISOString(),
+    terms_version: TERMS_VERSION,
+    interpretation_audio_enabled: true,
+  });
 }
 
 export function saveLocalProfile(profile: PerfilUsuarioRecord) {

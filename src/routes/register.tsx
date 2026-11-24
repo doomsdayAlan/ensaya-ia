@@ -113,7 +113,7 @@ function Register() {
           <span>
             Acepto los{" "}
             <Link to="/terminos" className="text-primary hover:underline" target="_blank">
-              términos
+              Términos y condiciones
             </Link>{" "}
             y la{" "}
             <Link to="/privacidad" className="text-primary hover:underline" target="_blank">
@@ -125,7 +125,7 @@ function Register() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !accepted}
           className="w-full inline-flex items-center justify-center gap-2 bg-primary-gradient text-primary-foreground rounded-lg py-3 text-sm font-medium shadow-glow hover:scale-[1.01] transition disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? (

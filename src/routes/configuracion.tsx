@@ -44,6 +44,7 @@ function Configuracion() {
   const [difficulty, setDifficulty] = useState(50);
   const [notifications, setNotifications] = useState(true);
   const [offline, setOffline] = useState(false);
+  const [interpretationAudio, setInterpretationAudio] = useState(true);
   const [privacy, setPrivacy] = useState("privado");
   const [requireLogin, setRequireLogin] = useState(true);
   const [storedUsers, setStoredUsers] = useState(0);
@@ -69,6 +70,7 @@ function Configuracion() {
     setDifficulty(profile.ai_difficulty);
     setNotifications(profile.notifications_enabled);
     setOffline(profile.offline_mode_enabled);
+    setInterpretationAudio(profile.interpretation_audio_enabled !== false);
     setPrivacy(profile.privacy_level);
   }, [profile]);
 
@@ -81,6 +83,7 @@ function Configuracion() {
         ai_difficulty: difficulty,
         notifications_enabled: notifications,
         offline_mode_enabled: offline,
+        interpretation_audio_enabled: interpretationAudio,
         privacy_level: privacy,
       });
       const privacyChanged = await applyPrivacyToMyScripts(privacy);
@@ -278,9 +281,16 @@ function Configuracion() {
             <SettingCard
               icon={Download}
               title="Modo sin conexión"
-              desc="Las notas del director usan plantillas locales. El ensayo y los libretos siguen en este dispositivo."
+              desc="Las notas del director usan plantillas locales. El ensayo y los libretos siguen en este dispositivo. En este modo no se envía audio."
               enabled={offline}
               onToggle={setOffline}
+            />
+            <SettingCard
+              icon={Mic}
+              title="Enviar el audio para consejos de interpretación"
+              desc="Con los términos aceptados, las tomas de tu voz se envían al cerrar el ensayo para un consejo orientativo. Puedes apagarlo. El modo sin conexión tampoco lo envía."
+              enabled={interpretationAudio}
+              onToggle={setInterpretationAudio}
             />
             <div className="bg-card border border-border/60 rounded-xl p-5">
               <div className="flex items-center gap-3 mb-4">

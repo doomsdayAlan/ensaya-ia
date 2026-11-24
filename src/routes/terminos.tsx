@@ -42,6 +42,15 @@ function Terminos() {
           opcionales: plantillas locales o, si está configurado, un modelo de lenguaje.
         </p>
         <p>
+          Si aceptas estos términos y dejas activo el interruptor de consejos de interpretación, las
+          tomas de tu voz salen de este dispositivo hacia el servidor de Ensaya IA y, desde ahí, al
+          proveedor del modelo (Google). Solo se usan para un consejo orientativo al cerrar el
+          ensayo. No se guardan en el servidor. En el plan gratuito, Google puede usar ese contenido
+          para mejorar sus productos. El consejo no es la evaluación de un maestro ni sustituye la
+          dirección escénica. El modo sin conexión no envía audio. Puedes apagar el envío en
+          Configuración.
+        </p>
+        <p>
           Puedes borrar tu cuenta y tus datos desde este dispositivo. El uso es personal: no
           compartas tu contraseña.
         </p>

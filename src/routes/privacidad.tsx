@@ -34,6 +34,12 @@ function Privacidad() {
           almacenan de forma local (IndexedDB y localStorage de este navegador).
         </p>
         <p>
+          Las grabaciones siguen en este dispositivo. Si dejas activo “Enviar el audio para consejos
+          de interpretación”, al cerrar el ensayo esas tomas se envían al servidor de Ensaya IA y de
+          ahí al proveedor del modelo. El servidor no las almacena. Si apagas el interruptor o el
+          modo sin conexión, no salen del navegador.
+        </p>
+        <p>
           En Configuración puedes marcar tus libretos como privados o públicos para otras cuentas
           del mismo dispositivo. Las grabaciones de grupo solo las ven los miembros de ese grupo.
         </p>

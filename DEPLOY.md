@@ -34,7 +34,9 @@ AI_PROVIDER=gemini
 GEMINI_API_KEY=tu-clave
 ```
 
-`GEMINI_API_KEY` no lleva prefijo `VITE_`: vive solo en el servidor. Si omites las de Supabase, la app sigue con libretos locales. Si las pones y el host no existe, ignora el error de red y usa lo local.
+`GEMINI_API_KEY` no lleva prefijo `VITE_`: vive solo en el servidor. La misma clave sirve para las notas del director y para los consejos de interpretación; no hace falta otra. Si omites las de Supabase, la app sigue con libretos locales. Si las pones y el host no existe, ignora el error de red y usa lo local.
+
+Opcional en el servidor, también sin prefijo `VITE_`: `INTERPRETATION_TIMEOUT_MS=30000`. `HUME_API_KEY` y `ELEVENLABS_API_KEY` no se usan en esta versión. Después de cambiar variables, vuelve a desplegar.
 
 ## Donde alojarlo
 

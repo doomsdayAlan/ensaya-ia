@@ -50,6 +50,9 @@ export type Database = {
           privacy_level: string;
           rehearsal_mode: string;
           suggest_emotions: boolean;
+          terms_accepted_at: string | null;
+          terms_version: string | null;
+          interpretation_audio_enabled: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -67,6 +70,9 @@ export type Database = {
           privacy_level?: string;
           rehearsal_mode?: string;
           suggest_emotions?: boolean;
+          terms_accepted_at?: string | null;
+          terms_version?: string | null;
+          interpretation_audio_enabled?: boolean;
           updated_at?: string;
           user_id: string;
         };
@@ -84,6 +90,9 @@ export type Database = {
           privacy_level?: string;
           rehearsal_mode?: string;
           suggest_emotions?: boolean;
+          terms_accepted_at?: string | null;
+          terms_version?: string | null;
+          interpretation_audio_enabled?: boolean;
           updated_at?: string;
           user_id?: string;
         };

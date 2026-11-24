@@ -33,6 +33,9 @@ export type StoredProfile = {
   notifications_enabled: number;
   offline_mode_enabled: number;
   privacy_level: string;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
+  interpretation_audio_enabled?: number;
   created_at: string;
   updated_at: string;
 };
@@ -278,6 +281,9 @@ export function defaultStoredProfile(
     notifications_enabled: 1,
     offline_mode_enabled: 1,
     privacy_level: "privado",
+    terms_accepted_at: null,
+    terms_version: null,
+    interpretation_audio_enabled: 1,
     created_at: user.createdAt,
     updated_at: user.createdAt,
   };
