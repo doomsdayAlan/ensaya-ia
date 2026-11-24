@@ -139,11 +139,7 @@ export function DirectorAvatar({
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-medium text-sm">{title}</h3>
-              {sourceLabel && (
-                <p className="text-[10px] tracking-widest uppercase text-muted-foreground mt-0.5">
-                  {sourceLabel}
-                </p>
-              )}
+              {sourceLabel && <p className="text-xs text-muted-foreground mt-0.5">{sourceLabel}</p>}
             </div>
             <button
               type="button"

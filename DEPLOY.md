@@ -36,7 +36,7 @@ GEMINI_API_KEY=tu-clave
 
 `GEMINI_API_KEY` no lleva prefijo `VITE_`: vive solo en el servidor. La misma clave sirve para las notas del director y para los consejos de interpretación; no hace falta otra. Si omites las de Supabase, la app sigue con libretos locales. Si las pones y el host no existe, ignora el error de red y usa lo local.
 
-Opcional en el servidor, también sin prefijo `VITE_`: `INTERPRETATION_TIMEOUT_MS=30000`. `HUME_API_KEY` y `ELEVENLABS_API_KEY` no se usan en esta versión. Después de cambiar variables, vuelve a desplegar.
+Opcional en el servidor, también sin prefijo `VITE_`: `INTERPRETATION_TIMEOUT_MS=30000` y `INTERPRETATION_MODEL=gemini-3.5-flash-lite`. El análisis de voz no usa `AI_MODEL`; si esa variable quedó en un id viejo, quítala o cámbiala para las notas. `HUME_API_KEY` y `ELEVENLABS_API_KEY` no se usan en esta versión. Después de cambiar variables, vuelve a desplegar. Los logs de cada ensayo muestran `clave=si` o `clave=no`, el modelo y el motivo, nunca la clave ni el audio.
 
 ## Donde alojarlo
 

@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
   if (env.AI_PROVIDER) process.env.AI_PROVIDER ??= env.AI_PROVIDER;
   if (env.AI_MODEL) process.env.AI_MODEL ??= env.AI_MODEL;
   if (env.GEMINI_MODEL) process.env.GEMINI_MODEL ??= env.GEMINI_MODEL;
+  if (env.INTERPRETATION_MODEL) process.env.INTERPRETATION_MODEL ??= env.INTERPRETATION_MODEL;
   if (env.GROQ_MODEL) process.env.GROQ_MODEL ??= env.GROQ_MODEL;
   if (env.OPENAI_MODEL) process.env.OPENAI_MODEL ??= env.OPENAI_MODEL;
   if (env.AI_TIMEOUT_MS) process.env.AI_TIMEOUT_MS ??= env.AI_TIMEOUT_MS;

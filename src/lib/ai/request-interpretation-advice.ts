@@ -22,6 +22,7 @@ function parseTakes(data: unknown): InterpretationTakeInput[] {
       cue: text(take.cue, 240),
       baseEmotion: text(take.baseEmotion, 80),
       spoken: text(take.spoken, 800),
+      sceneContext: text(take.sceneContext, 160),
       durationSec: Number.isFinite(duration) ? duration : 0,
       mimeType: text(take.mimeType, 80) || "audio/webm",
       audioBase64,

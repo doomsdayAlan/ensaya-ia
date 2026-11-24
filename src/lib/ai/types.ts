@@ -18,6 +18,8 @@ export type RehearsalFeedbackInput = {
 export type RehearsalFeedbackResult = {
   text: string;
   source: AiProviderId;
+  model?: string | null;
+  reason?: string | null;
 };
 
 export type RehearsalAiProvider = {

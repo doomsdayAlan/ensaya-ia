@@ -24,10 +24,13 @@ export function createGeminiProvider(): RehearsalAiProvider | null {
   return {
     id: "gemini",
     async generateFeedback(input: RehearsalFeedbackInput) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
       const response = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: feedbackSystemPrompt() }] },
           contents: [{ role: "user", parts: [{ text: feedbackUserPrompt(input) }] }],

@@ -86,16 +86,26 @@ export type LocalRehearsalReport = {
   score: number;
   feedback: string;
   feedbackSource?: string;
+  feedbackModel?: string | null;
+  feedbackReason?: string | null;
   lineNotes?: RehearsalLineNote[];
   interpretation?: {
     disclaimer: string;
     notice: string | null;
+    source?: string | null;
+    model?: string | null;
+    reason?: string | null;
     lines: Array<{
       lineId: string;
       detectedExpressions: Array<{ name: string; score: number }>;
       expectedEmotion: string;
       alignment: string;
       tips: string;
+      intonation?: string;
+      pauses?: string;
+      volume?: string;
+      rhythm?: string;
+      intention?: string;
     }>;
   } | null;
 };
@@ -147,6 +157,9 @@ export function loadLocalReport(): LocalRehearsalReport | null {
 type StoredHistoryEntry = RehearsalSummary & {
   lineNotes?: RehearsalLineNote[];
   interpretation?: LocalRehearsalReport["interpretation"];
+  feedbackSource?: string | null;
+  feedbackModel?: string | null;
+  feedbackReason?: string | null;
 };
 
 function readHistory() {
@@ -198,7 +211,9 @@ export function loadReportFromHistoryId(id: string): LocalRehearsalReport | null
     projection: row.projection_score ?? 0,
     score: row.score ?? 0,
     feedback: row.feedback_summary ?? "Sin retroalimentacion guardada.",
-    feedbackSource: "history",
+    feedbackSource: row.feedbackSource ?? "template",
+    feedbackModel: row.feedbackModel ?? null,
+    feedbackReason: row.feedbackReason ?? null,
     lineNotes: row.lineNotes,
     interpretation: row.interpretation ?? null,
   };
@@ -275,6 +290,9 @@ function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContex
     ...summary,
     lineNotes: detail.lineNotes,
     interpretation: detail.interpretation,
+    feedbackSource: report.feedbackSource ?? null,
+    feedbackModel: report.feedbackModel ?? null,
+    feedbackReason: report.feedbackReason ?? null,
   };
   writeJson(
     localStorage,

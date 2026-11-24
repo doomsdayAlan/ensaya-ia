@@ -28,8 +28,13 @@ export async function collectInterpretationTakes(input: {
   sceneId: string | null;
   grupoId: string;
   userId: string;
+  sceneTitle?: string;
   lines: InterpretationLineDraft[];
-}): Promise<{ takes: InterpretationTakeInput[]; notice: string | null }> {
+}): Promise<{
+  takes: InterpretationTakeInput[];
+  notice: string | null;
+  dropReason: string | null;
+}> {
   const rows = await listGrabacionesByScript(input.scriptId);
   const byLine = new Map<string, StoredGrupoGrabacion>();
   for (const row of rows) {
@@ -62,10 +67,11 @@ export async function collectInterpretationTakes(input: {
       cue: take.cue,
       baseEmotion: take.baseEmotion,
       spoken: take.spoken,
+      sceneContext: input.sceneTitle?.trim() || "",
       durationSec: take.durationSec,
       mimeType: take.mimeType,
       audioBase64: await blobToBase64(take.blob),
     });
   }
-  return { takes, notice: selection.notice };
+  return { takes, notice: selection.notice, dropReason: selection.dropReason };
 }

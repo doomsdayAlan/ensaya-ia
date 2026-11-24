@@ -139,6 +139,7 @@ function Ensayo() {
   const chunksRef = useRef<Blob[]>([]);
   const lastTakeBlobRef = useRef<Blob | null>(null);
   const takeStartedAtRef = useRef<number>(0);
+  const takeBlockRef = useRef<string | null>(null);
   const [lastTakeUrl, setLastTakeUrl] = useState<string | null>(null);
   const [groupAudioUrls, setGroupAudioUrls] = useState<Record<string, string>>({});
   const advancingRef = useRef(false);
@@ -291,8 +292,13 @@ function Ensayo() {
       recorder.start();
       recorderRef.current = recorder;
       setMicStream(stream);
-    } catch {
-      // El reconocimiento de voz sigue funcionando aunque no se grabe el WebM.
+      takeBlockRef.current = null;
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      takeBlockRef.current =
+        name === "NotAllowedError" || name === "NotFoundError"
+          ? "el micrófono no permitió grabar"
+          : "no hubo tomas de audio válidas";
     }
   };
 
@@ -367,7 +373,7 @@ function Ensayo() {
         characterName: line.character?.name ?? selectedCharacter?.name ?? "Actor",
         blob,
         durationSec: takeStartedAtRef.current
-          ? Math.max(0.1, (Date.now() - takeStartedAtRef.current) / 1000)
+          ? Math.max(0, (Date.now() - takeStartedAtRef.current) / 1000)
           : null,
       });
       setGroupAudioUrls((prev) => {
@@ -477,6 +483,8 @@ function Ensayo() {
         });
     let feedback = fallbackFeedback;
     let feedbackSource = "template";
+    let feedbackModel: string | null = null;
+    let feedbackReason: string | null = isOfflineMode() ? "no hay conexión" : null;
     // Lectura: no pedir notas de director al modelo (no hay memorizacion que evaluar).
     const wantsAiNotes = !isLectura && activeConfig?.feedbackEnabled !== false && !isOfflineMode();
     if (wantsAiNotes) {
@@ -497,22 +505,33 @@ function Ensayo() {
         if (notes?.text) {
           feedback = notes.text;
           feedbackSource = notes.source;
+          feedbackModel = notes.model ?? null;
+          feedbackReason = notes.reason ?? null;
         }
       } catch {
         feedback = fallbackFeedback;
         feedbackSource = "template";
+        feedbackReason = "no hay conexión";
       }
     }
 
     let interpretation: {
       disclaimer: string;
       notice: string | null;
+      source: string;
+      model: string | null;
+      reason: string | null;
       lines: Array<{
         lineId: string;
         detectedExpressions: Array<{ name: string; score: number }>;
         expectedEmotion: string;
         alignment: string;
         tips: string;
+        intonation?: string;
+        pauses?: string;
+        volume?: string;
+        rhythm?: string;
+        intention?: string;
       }>;
     } | null = null;
     const profile = profileData?.profile;
@@ -548,6 +567,7 @@ function Ensayo() {
           sceneId: takeSceneId,
           grupoId: takeGroupId,
           userId: profile.user_id,
+          sceneTitle: setup?.scene?.title ?? "",
           lines: interpretationLines,
         });
         if (collected.takes.length > 0) {
@@ -556,20 +576,42 @@ function Ensayo() {
           if (interpretation && collected.notice && !interpretation.notice) {
             interpretation = { ...interpretation, notice: collected.notice };
           }
-        } else if (collected.notice) {
+        } else {
+          const reason =
+            takeBlockRef.current ?? collected.dropReason ?? "no hubo tomas de audio válidas";
           interpretation = {
             disclaimer: INTERPRETATION_DISCLAIMER,
-            notice: collected.notice,
+            notice: reason,
+            source: "template",
+            model: null,
+            reason,
             lines: [],
           };
         }
       } catch {
         interpretation = {
           disclaimer: INTERPRETATION_DISCLAIMER,
-          notice: "No hubo consejos de interpretación.",
+          notice: "no hay conexión",
+          source: "template",
+          model: null,
+          reason: "no hay conexión",
           lines: [],
         };
       }
+    } else if (
+      !isLectura &&
+      profile?.terms_version === TERMS_VERSION &&
+      profile.interpretation_audio_enabled !== false &&
+      isOfflineMode()
+    ) {
+      interpretation = {
+        disclaimer: INTERPRETATION_DISCLAIMER,
+        notice: "no hay conexión",
+        source: "template",
+        model: null,
+        reason: "no hay conexión",
+        lines: [],
+      };
     }
 
     try {
@@ -594,7 +636,9 @@ function Ensayo() {
           projection,
           score,
           feedback,
-          feedbackSource: !isLectura && isOfflineMode() ? "offline-template" : feedbackSource,
+          feedbackSource: !isLectura && isOfflineMode() ? "template" : feedbackSource,
+          feedbackModel,
+          feedbackReason: !isLectura && isOfflineMode() ? "no hay conexión" : feedbackReason,
           lineNotes: [...lineNotesRef.current],
           interpretation,
         },

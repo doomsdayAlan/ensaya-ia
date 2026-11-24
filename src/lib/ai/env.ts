@@ -16,13 +16,15 @@ export function geminiApiKey() {
   return readEnv("GEMINI_API_KEY") || readEnv("GOOGLE_GENERATIVE_AI_API_KEY");
 }
 
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+
 export function geminiModel() {
-  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-2.5-flash";
+  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || DEFAULT_GEMINI_MODEL;
 }
 
-/** Análisis de audio. No hereda el modelo viejo del importador de libretos. */
+/** Análisis de audio. No hereda AI_MODEL ni GEMINI_MODEL. */
 export function interpretationModel() {
-  return readEnv("AI_MODEL") || readEnv("GEMINI_MODEL") || "gemini-3.5-flash-lite";
+  return readEnv("INTERPRETATION_MODEL") || DEFAULT_GEMINI_MODEL;
 }
 
 export function interpretationTimeoutMs() {

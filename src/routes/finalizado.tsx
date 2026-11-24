@@ -23,7 +23,7 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { DirectorAvatar } from "@/components/DirectorAvatar";
 import { formatDuration, getPerfilUsuario } from "@/lib/rehearsal-data";
-import { feedbackSourceLabel } from "@/lib/ai/feedback-label";
+import { feedbackSourceLabel, interpretationSourceLabel } from "@/lib/ai/feedback-label";
 import {
   loadLocalReport,
   loadRecentRehearsalsSafe,
@@ -267,17 +267,24 @@ function Finalizado() {
             mode="feedback"
             text={feedback}
             score={mode === "lectura" ? undefined : overall}
-            sourceLabel={feedbackSourceLabel(localReport?.feedbackSource)}
+            sourceLabel={feedbackSourceLabel(
+              localReport?.feedbackSource,
+              localReport?.feedbackModel,
+              localReport?.feedbackReason,
+            )}
             className="mt-4"
           />
           {localReport?.interpretation ? (
-            <p className="mt-3 text-xs text-muted-foreground">
-              {localReport.interpretation.disclaimer}{" "}
-              {localReport.interpretation.notice ??
-                (localReport.interpretation.lines.length > 0
-                  ? "El detalle de cada línea está en el reporte detallado."
-                  : "No hubo consejos de interpretación.")}
-            </p>
+            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <p>{interpretationSourceLabel(localReport.interpretation)}</p>
+              <p>
+                {localReport.interpretation.disclaimer}{" "}
+                {localReport.interpretation.notice ??
+                  (localReport.interpretation.lines.length > 0
+                    ? "El detalle de cada línea está en el reporte detallado."
+                    : "")}
+              </p>
+            </div>
           ) : null}
         </div>
       </div>
@@ -476,6 +483,7 @@ function InterpretationDetail({
   return (
     <div className="mb-4 space-y-3">
       <h4 className="text-sm font-medium">Consejos de interpretación (orientativos)</h4>
+      <p className="text-xs text-foreground/80">{interpretationSourceLabel(block)}</p>
       <p className="text-xs text-muted-foreground">{block.disclaimer}</p>
       {block.notice ? <p className="text-xs text-muted-foreground">{block.notice}</p> : null}
       {block.lines.map((line) => {
@@ -507,6 +515,11 @@ function InterpretationDetail({
                 No se analizó audio de esta línea.
               </p>
             ) : null}
+            {line.intonation ? <p className="mt-1 text-xs">Entonación: {line.intonation}</p> : null}
+            {line.pauses ? <p className="mt-1 text-xs">Pausas: {line.pauses}</p> : null}
+            {line.volume ? <p className="mt-1 text-xs">Volumen: {line.volume}</p> : null}
+            {line.rhythm ? <p className="mt-1 text-xs">Ritmo: {line.rhythm}</p> : null}
+            {line.intention ? <p className="mt-1 text-xs">Intención: {line.intention}</p> : null}
             {line.tips ? <p className="mt-2 text-sm">{line.tips}</p> : null}
           </div>
         );

@@ -23,6 +23,7 @@ import {
   type CastAssignmentResult,
 } from "./actor-assignment";
 import { checkTinyLLMHardware, type HardwareStatus } from "./tiny-character-detector";
+import { pipelineCharacterCast } from "@/lib/ai/pipeline-cast";
 import { inferVoiceLabel } from "@/lib/rehearsal-ai";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
 import type {
@@ -191,14 +192,14 @@ export async function executeScriptPipeline(
 
   // 1. Crear registros de Personajes
   const characters: CharacterRecord[] = conflictMatrix.characterStats.map((stat, idx) => {
-    const isFirst = idx === 0;
+    const cast = pipelineCharacterCast(inferVoiceLabel(stat.name));
     return {
       id: `local-char-${crypto.randomUUID()}`,
       script_id: scriptId,
       name: stat.name,
       role: `${stat.totalWords} palabras (${stat.scenes.size} escenas)`,
-      actor_type: isFirst ? "user" : "ai",
-      voice: isFirst ? "Tu voz" : inferVoiceLabel(stat.name),
+      actor_type: cast.actor_type,
+      voice: cast.voice,
       base_emotion: "Neutral",
       sort_order: idx + 1,
       created_at: now,

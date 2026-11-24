@@ -16,12 +16,20 @@ export type HistoryLineNote = {
 export type HistoryInterpretation = {
   disclaimer: string;
   notice: string | null;
+  source?: string | null;
+  model?: string | null;
+  reason?: string | null;
   lines: Array<{
     lineId: string;
     detectedExpressions: Array<{ name: string; score: number }>;
     expectedEmotion: string;
     alignment: string;
     tips: string;
+    intonation?: string;
+    pauses?: string;
+    volume?: string;
+    rhythm?: string;
+    intention?: string;
   }>;
 };
 
@@ -67,5 +75,8 @@ function trimInterpretation(block: HistoryInterpretation | null, tipMax: number)
       tips: line.tips.slice(0, tipMax),
       detectedExpressions: line.detectedExpressions.slice(0, 3),
     })),
+    source: block.source ?? null,
+    model: block.model ?? null,
+    reason: block.reason ?? null,
   };
 }

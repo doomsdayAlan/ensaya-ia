@@ -28,12 +28,20 @@ export type InterpretationLine = {
   expectedEmotion: string;
   alignment: InterpretationAlignment;
   tips: string;
+  intonation?: string;
+  pauses?: string;
+  volume?: string;
+  rhythm?: string;
+  intention?: string;
 };
 
 export type InterpretationAdvice = {
   disclaimer: string;
   lines: InterpretationLine[];
   notice: string | null;
+  source: "gemini" | "template";
+  model: string | null;
+  reason: string | null;
 };
 
 export type TakeCandidate = {
@@ -47,6 +55,7 @@ export type TakeSelection<T extends TakeCandidate = TakeCandidate> = {
   analyzed: number;
   considered: number;
   notice: string | null;
+  dropReason: string | null;
 };
 
 export function shouldRequestInterpretation(input: {
@@ -65,23 +74,36 @@ export function shouldRequestInterpretation(input: {
   );
 }
 
+/** Si el reloj guardó 0,1 s pero el audio pesa como una toma real, no se descarta. */
+export function measuredTakeSeconds(durationSec: number | null | undefined, byteLength: number) {
+  const known = typeof durationSec === "number" && Number.isFinite(durationSec) ? durationSec : 0;
+  if (known > INTERPRETATION_LIMITS.maxTakeSec) return known;
+  if (known >= INTERPRETATION_LIMITS.minTakeSec) return known;
+  if (byteLength >= 2_000) {
+    return Math.min(INTERPRETATION_LIMITS.maxTakeSec, Math.max(0.3, byteLength / 4_000));
+  }
+  return known;
+}
+
 export function selectTakesForAnalysis<T extends TakeCandidate>(takes: T[]): TakeSelection<T> {
   const considered = takes.length;
   const kept: T[] = [];
   let totalSec = 0;
   let totalBytes = 0;
+  let short = 0;
+  let long = 0;
   let skipped = 0;
 
   for (const take of takes) {
-    if (
-      !take.lineId ||
-      take.byteLength <= 0 ||
-      take.durationSec < INTERPRETATION_LIMITS.minTakeSec
-    ) {
+    const durationSec = measuredTakeSeconds(take.durationSec, take.byteLength);
+    const sized = { ...take, durationSec };
+    if (!sized.lineId || sized.byteLength <= 0 || durationSec < INTERPRETATION_LIMITS.minTakeSec) {
+      short += durationSec < INTERPRETATION_LIMITS.minTakeSec ? 1 : 0;
       skipped += 1;
       continue;
     }
-    if (take.durationSec > INTERPRETATION_LIMITS.maxTakeSec) {
+    if (durationSec > INTERPRETATION_LIMITS.maxTakeSec) {
+      long += 1;
       skipped += 1;
       continue;
     }
@@ -89,7 +111,7 @@ export function selectTakesForAnalysis<T extends TakeCandidate>(takes: T[]): Tak
       skipped += 1;
       continue;
     }
-    if (totalSec + take.durationSec > INTERPRETATION_LIMITS.maxTotalSec) {
+    if (totalSec + durationSec > INTERPRETATION_LIMITS.maxTotalSec) {
       skipped += 1;
       continue;
     }
@@ -97,17 +119,31 @@ export function selectTakesForAnalysis<T extends TakeCandidate>(takes: T[]): Tak
       skipped += 1;
       continue;
     }
-    kept.push(take);
-    totalSec += take.durationSec;
-    totalBytes += take.byteLength;
+    kept.push(sized);
+    totalSec += durationSec;
+    totalBytes += sized.byteLength;
   }
 
   const notice =
-    kept.length < considered
+    kept.length > 0 && kept.length < considered
       ? `Se analizaron ${kept.length} de ${considered} líneas para no exceder el límite.`
       : null;
+  const dropReason =
+    kept.length === 0
+      ? considered === 0
+        ? "no hubo tomas de audio válidas"
+        : short > 0 || long > 0
+          ? "las tomas duraron menos de 0,3 s o más de 15 s"
+          : "no hubo tomas de audio válidas"
+      : null;
 
-  return { kept, analyzed: kept.length, considered, notice: skipped > 0 ? notice : null };
+  return {
+    kept,
+    analyzed: kept.length,
+    considered,
+    notice: skipped > 0 && kept.length > 0 ? notice : null,
+    dropReason,
+  };
 }
 
 function clampScore(value: unknown) {
@@ -157,6 +193,10 @@ export function parseInterpretationPayload(
     expressions.sort((a, b) => b.score - a.score);
 
     const tips = typeof line.tips === "string" ? line.tips.replace(/\s+/g, " ").trim() : "";
+    const note = (value: unknown) =>
+      typeof value === "string" && value.trim()
+        ? value.replace(/\s+/g, " ").trim().slice(0, 180)
+        : undefined;
     lines.push({
       lineId,
       detectedExpressions: expressions.slice(0, 3),
@@ -166,6 +206,11 @@ export function parseInterpretationPayload(
           : "Sin emoción indicada",
       alignment: asAlignment(line.alignment),
       tips: tips.slice(0, 400),
+      intonation: note(line.intonation),
+      pauses: note(line.pauses),
+      volume: note(line.volume),
+      rhythm: note(line.rhythm),
+      intention: note(line.intention),
     });
   }
 
@@ -176,7 +221,7 @@ export function parseInterpretationPayload(
       ? row.disclaimer.trim().slice(0, 240)
       : INTERPRETATION_DISCLAIMER;
 
-  return { disclaimer, lines, notice: null };
+  return { disclaimer, lines, notice: null, source: "gemini", model: null, reason: null };
 }
 
 /** Sin audio útil o sin respuesta válida no se inventan expresiones. */
@@ -186,7 +231,20 @@ export function interpretationResult(
 ): InterpretationAdvice | null {
   if (!parsed && !notice) return null;
   if (!parsed) {
-    return { disclaimer: INTERPRETATION_DISCLAIMER, lines: [], notice };
+    return {
+      disclaimer: INTERPRETATION_DISCLAIMER,
+      lines: [],
+      notice,
+      source: "template",
+      model: null,
+      reason: notice,
+    };
   }
-  return { ...parsed, notice: notice ?? parsed.notice };
+  return {
+    ...parsed,
+    notice: notice ?? parsed.notice,
+    source: parsed.source ?? "gemini",
+    model: parsed.model ?? null,
+    reason: parsed.reason ?? null,
+  };
 }
