@@ -52,6 +52,7 @@ import {
   resolveRehearsalVoice,
   scoreRehearsal,
   speakLine,
+  isSpeechCancelled,
   stopSpeaking,
 } from "@/lib/rehearsal-ai";
 import {
@@ -841,7 +842,7 @@ function Ensayo() {
           advance();
         })
         .catch((error) => {
-          if (cancelled) return;
+          if (cancelled || isSpeechCancelled(error)) return;
           setIsSpeaking(false);
           setConnectionStatus(error instanceof Error ? error.message : "No se pudo leer la línea.");
         });
@@ -949,7 +950,7 @@ function Ensayo() {
         advance();
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (cancelled || isSpeechCancelled(error)) return;
         setIsSpeaking(false);
         setConnectionStatus(
           error instanceof Error

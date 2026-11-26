@@ -2,6 +2,9 @@
  * IA de ensayo en el navegador: Web Speech API (STT) + speechSynthesis (TTS).
  * En la nube hace falta HTTPS (salvo localhost). Chrome/Edge; Safari es limitado.
  */
+import { speakNaturalOrFallback, stopNaturalSpeech } from "@/lib/voice-service";
+
+export { isSpeechCancelled } from "@/lib/voice-service";
 type SpeechRecognitionCtor = new () => BrowserSpeechRecognition;
 
 type BrowserSpeechRecognition = {
@@ -194,10 +197,14 @@ export function resolveRehearsalVoice(options: {
   return options.characterVoice ?? null;
 }
 
-export function speakLine(
+export const DEFAULT_SPEECH_RATE = 0.92;
+export const DEFAULT_SPEECH_PITCH = 1.02;
+
+export function speakWithBrowser(
   text: string,
   preferredVoice?: string | null,
-  options?: { emotion?: string | null; applyEmotion?: boolean },
+  rate = DEFAULT_SPEECH_RATE,
+  pitch = DEFAULT_SPEECH_PITCH,
 ) {
   if (!canUseSpeechSynthesis()) {
     return Promise.reject(new Error("Este navegador no puede leer las líneas en voz alta."));
@@ -237,12 +244,8 @@ export function speakLine(
       }
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = SPEECH_LOCALE;
-      const prosody =
-        options?.applyEmotion && options.emotion
-          ? emotionProsody(options.emotion)
-          : { rate: 0.92, pitch: 1.02 };
-      utterance.rate = prosody.rate;
-      utterance.pitch = prosody.pitch;
+      utterance.rate = rate;
+      utterance.pitch = pitch;
       const voice = pickVoice(preferredVoice);
       if (voice) {
         utterance.voice = voice;
@@ -284,9 +287,27 @@ export function speakLine(
   });
 }
 
+export function speakLine(
+  text: string,
+  preferredVoice?: string | null,
+  options?: { emotion?: string | null; applyEmotion?: boolean },
+) {
+  const prosody =
+    options?.applyEmotion && options.emotion
+      ? emotionProsody(options.emotion)
+      : { rate: DEFAULT_SPEECH_RATE, pitch: DEFAULT_SPEECH_PITCH };
+  return speakNaturalOrFallback({
+    text,
+    storedVoice: preferredVoice,
+    rate: prosody.rate,
+    pitch: prosody.pitch,
+  });
+}
+
 export function stopSpeaking() {
   if (typeof window === "undefined") return;
   window.speechSynthesis.cancel();
+  stopNaturalSpeech();
 }
 
 function collectTranscripts(result: BrowserSpeechRecognitionEvent["results"][number]) {

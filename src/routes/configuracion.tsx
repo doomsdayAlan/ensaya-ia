@@ -6,7 +6,6 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import {
   Mic,
-  Volume2,
   Bell,
   Shield,
   Download,
@@ -27,7 +26,8 @@ import {
 import { requestNotificationPermission } from "@/lib/session-prefs";
 import { isAuthRequired, setAuthRequired } from "@/lib/app-config";
 import { getStoredUserCount } from "@/lib/local-auth";
-import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
+import { listBrowserVoiceNames } from "@/lib/rehearsal-ai";
+import { VoiceSelect } from "@/components/VoiceSelect";
 import { THEME_OPTIONS, useThemePreference, type ThemePreference } from "@/lib/theme";
 
 export const Route = createFileRoute("/configuracion")({
@@ -237,26 +237,12 @@ function Configuracion() {
             />
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <SelectBlock
-                  icon={Volume2}
-                  title="Voz del director / lector"
+                <VoiceSelect
+                  label="Voz del director / lector"
                   value={preferredVoice}
-                  options={Array.from(
-                    new Set(["Tu voz", preferredVoice, ...browserVoices].filter(Boolean)),
-                  ).map((voice) => [voice, voice] as const)}
+                  systemVoices={browserVoices}
                   onChange={setPreferredVoice}
                 />
-                <button
-                  type="button"
-                  className="mt-2 text-xs text-primary hover:underline"
-                  onClick={() => {
-                    void speakLine("Así suena la voz elegida.", preferredVoice).catch(() => {
-                      toast.error("Este navegador no tiene voces en español para la vista previa.");
-                    });
-                  }}
-                >
-                  Escuchar vista previa
-                </button>
                 {browserVoices.length === 0 ? (
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Si el navegador aún no lista voces, recarga la página. Se usan las voces

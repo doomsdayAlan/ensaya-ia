@@ -16,6 +16,7 @@ import { getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
 import { catalogActorType } from "@/lib/session-cast";
+import { createCastAssigner } from "@/lib/azure-voices";
 
 const LIBRARY_KEY = "ensaya-ia-library";
 
@@ -184,13 +185,14 @@ export function saveImportedLocalScript(
   const names = Array.from(
     new Set(allLines.map((line) => line.characterName).filter(Boolean)),
   ) as string[];
+  const assignVoice = createCastAssigner();
   const characters: CharacterRecord[] = names.map((name, index) => ({
     id: `local-char-${crypto.randomUUID()}`,
     script_id: scriptId,
     name,
     role: null,
     actor_type: "ai",
-    voice: "Sofia (Femenina)",
+    voice: assignVoice(name),
     base_emotion: "Neutral",
     sort_order: index + 1,
     created_at: now,
@@ -405,6 +407,7 @@ export function rewriteLocalScriptDialogue(scriptId: string, userId: string, raw
   const existingByName = new Map(
     current.characters.map((character) => [character.name.trim().toUpperCase(), character]),
   );
+  const assignVoice = createCastAssigner(current.characters.map((character) => character.voice));
   const characters: CharacterRecord[] = names.map((name, order) => {
     const prev = existingByName.get(name.toUpperCase());
     if (prev) {
@@ -416,7 +419,7 @@ export function rewriteLocalScriptDialogue(scriptId: string, userId: string, raw
       name,
       role: null,
       actor_type: "ai",
-      voice: "Sofia (Femenina)",
+      voice: assignVoice(name),
       base_emotion: "Neutral",
       sort_order: order + 1,
       created_at: now,
@@ -505,13 +508,14 @@ export function addLocalCharacter(
   if (exists) throw new Error("Ese personaje ya esta en el libreto.");
   const now = new Date().toISOString();
   const actorType = opts?.actorType ?? "ai";
+  const assignVoice = createCastAssigner(setup.characters.map((item) => item.voice));
   const character: CharacterRecord = {
     id: `local-char-${crypto.randomUUID()}`,
     script_id: scriptId,
     name: trimmed,
     role: null,
     actor_type: actorType,
-    voice: opts?.voice ?? (actorType === "user" ? "Tu voz" : "Sofia (Femenina)"),
+    voice: opts?.voice ?? (actorType === "user" ? "Tu voz" : assignVoice(trimmed)),
     base_emotion: "Neutral",
     sort_order: setup.characters.length + 1,
     created_at: now,

@@ -7,7 +7,6 @@ import {
   Play,
   ArrowRight,
   Plus,
-  Volume2,
   MoreVertical,
   User,
   Users,
@@ -25,7 +24,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
+import { listBrowserVoiceNames } from "@/lib/rehearsal-ai";
+import { VoiceSelect } from "@/components/VoiceSelect";
 import { TopBar } from "@/components/TopBar";
 import { addCharacterToScript, getPerfilUsuario, updatePerfilUsuario } from "@/lib/rehearsal-data";
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
@@ -44,19 +44,14 @@ function CharacterVoiceEditor({
   name,
   voice,
   emotion,
-  voices,
-  onPreview,
   onSave,
 }: {
   name: string;
   voice: string;
   emotion: string;
-  voices: string[];
-  onPreview: (voice: string) => void;
   onSave: (next: { name: string; voice: string; emotion: string }) => void;
 }) {
   const [nextName, setNextName] = useState(name);
-  const [nextVoice, setNextVoice] = useState(voice);
   const [nextEmotion, setNextEmotion] = useState(emotion);
   return (
     <form
@@ -64,7 +59,7 @@ function CharacterVoiceEditor({
       onSubmit={(event) => {
         event.preventDefault();
         if (nextName.trim().length < 2) return;
-        onSave({ name: nextName.trim(), voice: nextVoice, emotion: nextEmotion });
+        onSave({ name: nextName.trim(), voice, emotion: nextEmotion });
       }}
       onClick={(event) => event.stopPropagation()}
     >
@@ -75,20 +70,6 @@ function CharacterVoiceEditor({
           onChange={(event) => setNextName(event.target.value)}
           className="mt-1 w-full bg-surface border border-input rounded-lg px-2 py-1.5 text-sm text-foreground"
         />
-      </label>
-      <label className="text-xs text-muted-foreground">
-        Voz del navegador
-        <select
-          value={nextVoice}
-          onChange={(event) => setNextVoice(event.target.value)}
-          className="mt-1 w-full bg-surface border border-input rounded-lg px-2 py-1.5 text-sm text-foreground"
-        >
-          {voices.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
       </label>
       <label className="text-xs text-muted-foreground">
         Emoción
@@ -107,21 +88,12 @@ function CharacterVoiceEditor({
           ) : null}
         </select>
       </label>
-      <div className="sm:col-span-3 flex gap-2">
-        <button
-          type="button"
-          className="text-xs border border-border rounded-lg px-3 py-1.5"
-          onClick={() => onPreview(nextVoice)}
-        >
-          Escuchar
-        </button>
-        <button
-          type="submit"
-          className="text-xs bg-primary-gradient text-primary-foreground rounded-lg px-3 py-1.5"
-        >
-          Guardar
-        </button>
-      </div>
+      <button
+        type="submit"
+        className="text-xs bg-primary-gradient text-primary-foreground rounded-lg px-3 py-1.5 self-end"
+      >
+        Guardar
+      </button>
     </form>
   );
 }
@@ -211,6 +183,7 @@ function ConfigEnsayo() {
   const [numPhysicalHumans, setNumPhysicalHumans] = useState(2);
   const [castResult, setCastResult] = useState<CastAssignmentResult | null>(null);
   const [browserVoices, setBrowserVoices] = useState<string[]>([]);
+  const [preferredVoice, setPreferredVoice] = useState("");
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
 
   const { data: profileData } = useQuery({
@@ -304,6 +277,7 @@ function ConfigEnsayo() {
     setEmo(profile.suggest_emotions);
     setImprov(profile.allow_improv);
     setFeedback(profile.feedback_enabled);
+    if (profile.preferred_voice) setPreferredVoice(profile.preferred_voice);
   }, [profileData, modeFromSearch, grupoIdFromSearch]);
 
   useEffect(() => {
@@ -408,6 +382,7 @@ function ConfigEnsayo() {
         suggest_emotions: emo,
         allow_improv: improv,
         feedback_enabled: feedback,
+        preferred_voice: preferredVoice,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
@@ -615,6 +590,19 @@ function ConfigEnsayo() {
               </div>
             }
           >
+            <div className="mb-4 max-w-md">
+              <VoiceSelect
+                label="Voz del director / lector"
+                value={preferredVoice}
+                systemVoices={browserVoices}
+                onChange={(voice) => {
+                  setPreferredVoice(voice);
+                  void updatePerfilUsuario({ preferred_voice: voice }).then(() => {
+                    void queryClient.invalidateQueries({ queryKey: ["perfil-usuario"] });
+                  });
+                }}
+              />
+            </div>
             {castModalOpen && castResult && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="w-full max-w-xl bg-surface border border-border rounded-2xl shadow-2xl p-6 relative">
@@ -785,14 +773,6 @@ function ConfigEnsayo() {
                     ? "Tú"
                     : "Voz";
 
-                const voiceChoices = Array.from(
-                  new Set(
-                    ["Tu voz", character.voice ?? "", ...browserVoices].filter(
-                      (voice) => voice.trim().length > 0,
-                    ),
-                  ),
-                );
-
                 return (
                   <div key={character.id} className="space-y-2">
                     <div
@@ -841,11 +821,38 @@ function ConfigEnsayo() {
                           </div>
                         </div>
                       </div>
-                      <MiniValue
-                        label="Voz"
-                        value={character.voice ?? "Sin voz"}
-                        icon={tag === "Voz" ? <Volume2 className="w-3.5 h-3.5" /> : null}
-                      />
+                      {tag === "Tú" ? (
+                        <MiniValue label="Voz" value="Tu voz" />
+                      ) : (
+                        <div
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <VoiceSelect
+                            label="Voz"
+                            value={character.voice ?? ""}
+                            systemVoices={browserVoices}
+                            onChange={(voice) => {
+                              if (!setup?.script) return;
+                              const characters = setup.characters.map((item) =>
+                                item.id === character.id ? { ...item, voice } : item,
+                              );
+                              const byId = new Map(characters.map((item) => [item.id, item]));
+                              saveLocalScriptSetup({
+                                ...setup,
+                                characters,
+                                lines: setup.lines.map((line) => ({
+                                  ...line,
+                                  character: line.character_id
+                                    ? (byId.get(line.character_id) ?? line.character)
+                                    : line.character,
+                                })),
+                              });
+                              void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+                            }}
+                          />
+                        </div>
+                      )}
                       <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
                       <div />
                       <DropdownMenu>
@@ -872,13 +879,6 @@ function ConfigEnsayo() {
                           >
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              void speakLine("Esta es la voz de este personaje.", character.voice);
-                            }}
-                          >
-                            Escuchar vista previa
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -887,10 +887,6 @@ function ConfigEnsayo() {
                         name={character.name}
                         voice={character.voice ?? "Tu voz"}
                         emotion={character.base_emotion ?? "Neutral"}
-                        voices={voiceChoices}
-                        onPreview={(voice) => {
-                          void speakLine("Esta es la voz de este personaje.", voice);
-                        }}
                         onSave={(next) => {
                           const characters = setup.characters.map((item) =>
                             item.id === character.id
