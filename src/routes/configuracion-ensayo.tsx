@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -196,7 +196,7 @@ function ConfigEnsayo() {
     queryFn: loadScriptsSafe,
     staleTime: 5_000,
   });
-  const visibleScripts = (() => {
+  const visibleScripts = useMemo(() => {
     const base = (scripts || []).filter((script) => {
       if (!script) return false;
       return (
@@ -219,7 +219,7 @@ function ConfigEnsayo() {
       }
     }
     return base;
-  })();
+  }, [scripts, currentUserId, scriptIdFromSearch, lockedGrupoId]);
   const { data: setup, isLoading: setupLoading } = useQuery({
     queryKey: ["script-setup-v2", selectedScriptId, selectedSceneId],
     queryFn: () => loadScriptSetupSafe(selectedScriptId || undefined, selectedSceneId || undefined),
@@ -289,15 +289,15 @@ function ConfigEnsayo() {
     if (scriptIdFromSearch) {
       // Con grupo en la URL, solo preseleccionar si el libreto pertenece a ese grupo.
       if (lockedGrupoId && !isLibretoEnGrupo(lockedGrupoId, scriptIdFromSearch)) {
-        if (!selectedScriptId && visibleScripts.length > 0 && visibleScripts[0]) {
-          setSelectedScriptId(visibleScripts[0].id);
-        }
+        const fallback = visibleScripts[0]?.id;
+        if (!fallback) return;
+        setSelectedScriptId((cur) => (cur ? cur : fallback));
         return;
       }
-      setSelectedScriptId(scriptIdFromSearch);
+      setSelectedScriptId((cur) => (cur === scriptIdFromSearch ? cur : scriptIdFromSearch));
       return;
     }
-    if (selectedScriptId || !profileData || scriptsLoading) return;
+    if (!profileData || scriptsLoading) return;
     const owned = visibleScripts.filter(
       (script) => script.user_id === currentUserId && script.source_type !== "seed",
     );
@@ -307,7 +307,8 @@ function ConfigEnsayo() {
       (b.updated_at ?? "").localeCompare(a.updated_at ?? ""),
     )[0];
     const pick = active ?? latest;
-    if (pick) setSelectedScriptId(pick.id);
+    if (!pick) return;
+    setSelectedScriptId((cur) => (cur ? cur : pick.id));
   }, [
     selectedScriptId,
     visibleScripts,
@@ -320,22 +321,28 @@ function ConfigEnsayo() {
 
   useEffect(() => {
     if (!setup?.scene) return;
-    setSelectedSceneId((current) => current || setup.scene!.id);
+    const sceneId = setup.scene.id;
+    setSelectedSceneId((cur) => {
+      const next = cur || sceneId;
+      return cur === next ? cur : next;
+    });
   }, [setup?.scene]);
 
   useEffect(() => {
     setSessionCast(null);
-    setSelectedCharacterId(null);
+    setSelectedCharacterId((cur) => (cur === null ? cur : null));
   }, [setup?.script?.id]);
 
   useEffect(() => {
-    if (!setup?.characters?.length) {
-      setSelectedCharacterId(null);
+    const characters = setup?.characters;
+    if (!characters?.length) {
+      setSelectedCharacterId((cur) => (cur === null ? cur : null));
       return;
     }
-    setSelectedCharacterId((current) =>
-      current && setup.characters.some((char) => char?.id === current) ? current : null,
-    );
+    setSelectedCharacterId((cur) => {
+      const next = cur && characters.some((char) => char?.id === cur) ? cur : null;
+      return cur === next ? cur : next;
+    });
   }, [setup?.characters]);
 
   useEffect(() => {
@@ -355,7 +362,10 @@ function ConfigEnsayo() {
       setLockedGrupoId(grupoIdFromSearch);
       const info = await getGrupoParaScript(scriptIdFromSearch, grupoIdFromSearch);
       if (cancelled) return;
-      if (info?.personajeId) setSelectedCharacterId(info.personajeId);
+      if (info?.personajeId) {
+        const next = info.personajeId;
+        setSelectedCharacterId((cur) => (cur === next ? cur : next));
+      }
     })();
     return () => {
       cancelled = true;
@@ -367,7 +377,8 @@ function ConfigEnsayo() {
     let cancelled = false;
     void getGrupoParaScript(selectedScriptId, lockedGrupoId).then((info) => {
       if (cancelled || !info?.personajeId) return;
-      setSelectedCharacterId(info.personajeId);
+      const next = info.personajeId;
+      setSelectedCharacterId((cur) => (cur === next ? cur : next));
     });
     return () => {
       cancelled = true;
@@ -773,37 +784,27 @@ function ConfigEnsayo() {
                     ? "Tú"
                     : "Voz";
 
+                const chooseCharacter = () => {
+                  setSelectedCharacterId((cur) => (cur === character.id ? cur : character.id));
+                  setSessionCast((current) =>
+                    current?.some((member) => member.characterId === character.id) ? current : null,
+                  );
+                };
+
                 return (
                   <div key={character.id} className="space-y-2">
                     <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelectedCharacterId(character.id);
-                        setSessionCast((current) =>
-                          current?.some((member) => member.characterId === character.id)
-                            ? current
-                            : null,
-                        );
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedCharacterId(character.id);
-                          setSessionCast((current) =>
-                            current?.some((member) => member.characterId === character.id)
-                              ? current
-                              : null,
-                          );
-                        }
-                      }}
                       className={`w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 items-center border rounded-lg p-3 text-left transition ${
                         active
                           ? "bg-primary/10 border-primary/50"
                           : "bg-surface/60 border-border/40 hover:border-primary/30"
                       }`}
                     >
-                      <div className="flex items-center gap-3 min-w-[140px]">
+                      <button
+                        type="button"
+                        onClick={chooseCharacter}
+                        className="flex items-center gap-3 min-w-[140px] text-left"
+                      >
                         <div className="w-9 h-9 rounded-full bg-primary/15 grid place-items-center text-primary text-sm font-semibold">
                           {character.name?.[0] || "?"}
                         </div>
@@ -820,38 +821,33 @@ function ConfigEnsayo() {
                             {character.role ?? "Sin rol"}
                           </div>
                         </div>
-                      </div>
+                      </button>
                       {tag === "Tú" ? (
                         <MiniValue label="Voz" value="Tu voz" />
                       ) : (
-                        <div
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          <VoiceSelect
-                            label="Voz"
-                            value={character.voice ?? ""}
-                            systemVoices={browserVoices}
-                            onChange={(voice) => {
-                              if (!setup?.script) return;
-                              const characters = setup.characters.map((item) =>
-                                item.id === character.id ? { ...item, voice } : item,
-                              );
-                              const byId = new Map(characters.map((item) => [item.id, item]));
-                              saveLocalScriptSetup({
-                                ...setup,
-                                characters,
-                                lines: setup.lines.map((line) => ({
-                                  ...line,
-                                  character: line.character_id
-                                    ? (byId.get(line.character_id) ?? line.character)
-                                    : line.character,
-                                })),
-                              });
-                              void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
-                            }}
-                          />
-                        </div>
+                        <VoiceSelect
+                          label="Voz"
+                          value={character.voice ?? ""}
+                          systemVoices={browserVoices}
+                          onChange={(voice) => {
+                            if (!setup?.script) return;
+                            const characters = setup.characters.map((item) =>
+                              item.id === character.id ? { ...item, voice } : item,
+                            );
+                            const byId = new Map(characters.map((item) => [item.id, item]));
+                            saveLocalScriptSetup({
+                              ...setup,
+                              characters,
+                              lines: setup.lines.map((line) => ({
+                                ...line,
+                                character: line.character_id
+                                  ? (byId.get(line.character_id) ?? line.character)
+                                  : line.character,
+                              })),
+                            });
+                            void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+                          }}
+                        />
                       )}
                       <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
                       <div />
@@ -861,15 +857,11 @@ function ConfigEnsayo() {
                             type="button"
                             aria-label={`Acciones de ${character.name}`}
                             className="p-1 text-muted-foreground"
-                            onClick={(event) => event.stopPropagation()}
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          onClick={(event) => event.stopPropagation()}
-                        >
+                        <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             onClick={() =>
                               setEditingCharacterId((current) =>

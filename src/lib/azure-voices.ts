@@ -10,18 +10,6 @@ export type AzureVoice = {
 export const AZURE_VOICES: readonly AzureVoice[] = [
   { id: "es-CO-SalomeNeural", name: "Salomé", gender: "femenina", locale: "es-CO" },
   { id: "es-ES-XimenaNeural", name: "Ximena", gender: "femenina", locale: "es-ES" },
-  {
-    id: "es-ES-Ximena:DragonHDLatestNeural",
-    name: "Ximena HD",
-    gender: "femenina",
-    locale: "es-ES",
-  },
-  {
-    id: "es-MX-Ximena:DragonHDLatestNeural",
-    name: "Ximena HD MX",
-    gender: "femenina",
-    locale: "es-MX",
-  },
   { id: "es-MX-DaliaNeural", name: "Dalia", gender: "femenina", locale: "es-MX" },
   {
     id: "es-MX-DaliaMultilingualNeural",
@@ -30,18 +18,6 @@ export const AZURE_VOICES: readonly AzureVoice[] = [
     locale: "es-MX",
   },
   { id: "es-CR-JuanNeural", name: "Juan", gender: "masculina", locale: "es-CR" },
-  {
-    id: "es-ES-Tristan:DragonHDLatestNeural",
-    name: "Tristán HD",
-    gender: "masculina",
-    locale: "es-ES",
-  },
-  {
-    id: "es-MX-Tristan:DragonHDLatestNeural",
-    name: "Tristán HD MX",
-    gender: "masculina",
-    locale: "es-MX",
-  },
   { id: "es-MX-GerardoNeural", name: "Gerardo", gender: "masculina", locale: "es-MX" },
   { id: "es-PR-VictorNeural", name: "Víctor", gender: "masculina", locale: "es-PR" },
   { id: "es-PY-MarioNeural", name: "Mario", gender: "masculina", locale: "es-PY" },

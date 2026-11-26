@@ -29,7 +29,7 @@ export function VoiceSelect({
   useEffect(() => {
     let active = true;
     void loadAvailableAzureVoices().then((voices) => {
-      if (active) setAzureVoices(voices);
+      if (active) setAzureVoices(Array.isArray(voices) ? voices : []);
     });
     return () => {
       active = false;

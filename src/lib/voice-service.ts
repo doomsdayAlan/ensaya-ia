@@ -38,7 +38,9 @@ function warnFallback() {
 export function subscribeVoicePreview(listener: (voice: string | null) => void) {
   previewListeners.add(listener);
   listener(activePreview);
-  return () => previewListeners.delete(listener);
+  return () => {
+    previewListeners.delete(listener);
+  };
 }
 
 function setPreview(voice: string | null) {
@@ -201,9 +203,11 @@ export function startVoicePreview(storedVoice: string) {
     storedVoice,
     rate: DEFAULT_SPEECH_RATE,
     pitch: DEFAULT_SPEECH_PITCH,
-  }).finally(() => {
-    if (generation === previewGeneration) setPreview(null);
-  });
+  })
+    .catch(() => undefined)
+    .finally(() => {
+      if (generation === previewGeneration) setPreview(null);
+    });
 }
 
 export function stopVoicePreview() {
