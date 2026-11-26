@@ -158,6 +158,42 @@ export function saveLocalScriptSetup(setup: ScriptSetup) {
   return script;
 }
 
+/**
+ * Actualiza un personaje del libreto sin reescribir las líneas de otras escenas.
+ * El setup de pantalla suele traer solo las líneas de la escena activa.
+ */
+export function updateLocalCharacter(
+  scriptId: string,
+  characterId: string,
+  patch: { name?: string; voice?: string; base_emotion?: string },
+) {
+  const library = readLibrary();
+  const setup = library.setups[scriptId];
+  if (!setup?.script) {
+    throw new Error("No se encontro el libreto local.");
+  }
+  const characters = setup.characters.map((item) =>
+    item.id === characterId ? { ...item, ...patch } : item,
+  );
+  const byId = new Map(characters.map((item) => [item.id, item]));
+  const now = new Date().toISOString();
+  const script = { ...setup.script, updated_at: now };
+  library.scripts = library.scripts.map((item) => (item.id === scriptId ? script : item));
+  library.setups[scriptId] = {
+    ...setup,
+    script,
+    characters,
+    lines: setup.lines.map((line) => ({
+      ...line,
+      character: line.character_id
+        ? (byId.get(line.character_id) ?? line.character)
+        : line.character,
+    })),
+  };
+  writeLibrary(library);
+  return byId.get(characterId) ?? null;
+}
+
 /** Alias usado por el pipeline de ingestión teatral. */
 export const savePipelineScriptSetup = saveLocalScriptSetup;
 

@@ -14,11 +14,13 @@ export function VoiceSelect({
   value,
   systemVoices,
   onChange,
+  previewText = "Así suena la voz elegida",
 }: {
   label: string;
   value: string;
   systemVoices: string[];
   onChange: (value: string) => void;
+  previewText?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [azureVoices, setAzureVoices] = useState<AzureVoice[]>([]);
@@ -115,7 +117,7 @@ export function VoiceSelect({
         className="mt-2 text-xs text-primary hover:underline"
         onClick={() => {
           if (playing) stopVoicePreview();
-          else startVoicePreview(value);
+          else startVoicePreview(value, previewText);
         }}
       >
         {playing ? "Detener vista previa" : "Escuchar vista previa"}

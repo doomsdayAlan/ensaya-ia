@@ -193,13 +193,13 @@ export function loadAvailableAzureVoices() {
   return catalogRequest;
 }
 
-export function startVoicePreview(storedVoice: string) {
+export function startVoicePreview(storedVoice: string, previewText = "Así suena la voz elegida") {
   const generation = ++previewGeneration;
   stopNaturalSpeech();
   window.speechSynthesis?.cancel();
   setPreview(storedVoice);
   void speakNaturalOrFallback({
-    text: VOICE_PREVIEW_TEXT,
+    text: previewText.trim() || "Así suena la voz elegida",
     storedVoice,
     rate: DEFAULT_SPEECH_RATE,
     pitch: DEFAULT_SPEECH_PITCH,

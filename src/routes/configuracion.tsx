@@ -241,6 +241,7 @@ function Configuracion() {
                   label="Voz del director / lector"
                   value={preferredVoice}
                   systemVoices={browserVoices}
+                  previewText="Hola, soy tu director, te daré retroalimentación al finalizar"
                   onChange={setPreferredVoice}
                 />
                 {browserVoices.length === 0 ? (

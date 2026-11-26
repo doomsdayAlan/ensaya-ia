@@ -31,7 +31,7 @@ import { addCharacterToScript, getPerfilUsuario, updatePerfilUsuario } from "@/l
 import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib/rehearsal-runtime";
 import type { SessionCastMember } from "@/lib/session-cast";
 import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
-import { getLocalScriptSetup, saveLocalScriptSetup } from "@/lib/local-library";
+import { getLocalScriptSetup, updateLocalCharacter } from "@/lib/local-library";
 import {
   assignCharactersToHumans,
   computeConflictMatrixInMemory,
@@ -606,6 +606,7 @@ function ConfigEnsayo() {
                 label="Voz del director / lector"
                 value={preferredVoice}
                 systemVoices={browserVoices}
+                previewText="Hola, soy tu director, te daré retroalimentación al finalizar"
                 onChange={(voice) => {
                   setPreferredVoice(voice);
                   void updatePerfilUsuario({ preferred_voice: voice }).then(() => {
@@ -829,22 +830,10 @@ function ConfigEnsayo() {
                           label="Voz"
                           value={character.voice ?? ""}
                           systemVoices={browserVoices}
+                          previewText={`Así suena la voz elegida para ${character.name}`}
                           onChange={(voice) => {
                             if (!setup?.script) return;
-                            const characters = setup.characters.map((item) =>
-                              item.id === character.id ? { ...item, voice } : item,
-                            );
-                            const byId = new Map(characters.map((item) => [item.id, item]));
-                            saveLocalScriptSetup({
-                              ...setup,
-                              characters,
-                              lines: setup.lines.map((line) => ({
-                                ...line,
-                                character: line.character_id
-                                  ? (byId.get(line.character_id) ?? line.character)
-                                  : line.character,
-                              })),
-                            });
+                            updateLocalCharacter(setup.script.id, character.id, { voice });
                             void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
                           }}
                         />
@@ -880,26 +869,12 @@ function ConfigEnsayo() {
                         voice={character.voice ?? "Tu voz"}
                         emotion={character.base_emotion ?? "Neutral"}
                         onSave={(next) => {
-                          const characters = setup.characters.map((item) =>
-                            item.id === character.id
-                              ? {
-                                  ...item,
-                                  name: next.name,
-                                  voice: next.voice,
-                                  base_emotion: next.emotion,
-                                }
-                              : item,
-                          );
-                          const byId = new Map(characters.map((item) => [item.id, item]));
-                          saveLocalScriptSetup({
-                            ...setup,
-                            characters,
-                            lines: setup.lines.map((line) => ({
-                              ...line,
-                              character: line.character_id
-                                ? (byId.get(line.character_id) ?? line.character)
-                                : line.character,
-                            })),
+                          const scriptId = setup.script?.id;
+                          if (!scriptId) return;
+                          updateLocalCharacter(scriptId, character.id, {
+                            name: next.name,
+                            voice: next.voice,
+                            base_emotion: next.emotion,
                           });
                           void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
                           setEditingCharacterId(null);
