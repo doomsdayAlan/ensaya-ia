@@ -18,7 +18,7 @@ export function AppLogo({ size = 200 }: { size?: number }) {
         <Drama style={{ width: icon, height: icon }} strokeWidth={1.2} />
       </div>
       <span
-        className="font-display tracking-[0.08em] text-gradient-primary uppercase text-center leading-none"
+        className="font-display tracking-[0.08em] text-brand uppercase text-center leading-none"
         style={{ fontSize: title }}
       >
         {APP_NAME}

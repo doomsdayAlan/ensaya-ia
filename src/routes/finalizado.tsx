@@ -143,7 +143,9 @@ function Finalizado() {
 
   return (
     <AppShell>
-      <TopBar back={{ to: "/ensayo", label: "Modo ensayo" }} />
+      <TopBar
+        back={{ to: "/ensayo", label: "Modo ensayo", className: "text-brand hover:text-primary" }}
+      />
 
       {isLoading && !localReport && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
@@ -227,8 +229,8 @@ function Finalizado() {
                 />
                 <defs>
                   <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="oklch(0.78 0.16 60)" />
-                    <stop offset="100%" stopColor="oklch(0.85 0.18 70)" />
+                    <stop offset="0%" stopColor="var(--primary-hover)" />
+                    <stop offset="100%" stopColor="var(--primary)" />
                   </linearGradient>
                 </defs>
               </svg>

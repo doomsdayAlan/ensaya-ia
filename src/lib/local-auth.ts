@@ -12,6 +12,7 @@ import {
   defaultStoredProfile,
   findUserByEmail,
   getProfile,
+  listProfiles,
   hashNewPassword,
   insertUser,
   passwordMatches,
@@ -203,6 +204,7 @@ async function migrateLegacyUsers() {
 
 export async function ensureLocalAuthReady() {
   await migrateLegacyUsers();
+  await applyOptionalOfflineDefault();
 }
 
 export async function registerLocalAccount({
@@ -265,6 +267,30 @@ function persistUserSession(account: { id: string; email: string; displayName: s
 }
 
 const SKIP_DEMO_SEED_KEY = "ensaya-ia-skip-demo-seed";
+/** Una vez: las cuentas creadas con el modo sin conexión forzado pasan a tenerlo apagado. */
+const OFFLINE_OPTIONAL_KEY = "ensaya-ia-offline-optional-v1";
+
+async function applyOptionalOfflineDefault() {
+  if (!canUseBrowserStorage()) return;
+  if (localStorage.getItem(OFFLINE_OPTIONAL_KEY) === "1") return;
+
+  const profiles = readProfiles();
+  let changed = false;
+  for (const [userId, profile] of Object.entries(profiles)) {
+    if (!profile?.offline_mode_enabled) continue;
+    profiles[userId] = { ...profile, offline_mode_enabled: false };
+    changed = true;
+  }
+  if (changed) writeJson(localStorage, PROFILE_KEY, profiles);
+
+  const stored = await listProfiles();
+  for (const row of stored) {
+    if (!row.offline_mode_enabled) continue;
+    await upsertProfile({ ...row, offline_mode_enabled: 0 });
+  }
+
+  localStorage.setItem(OFFLINE_OPTIONAL_KEY, "1");
+}
 
 export function rememberLibraryClearedThisSession() {
   if (!canUseBrowserStorage()) return;

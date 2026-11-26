@@ -1,15 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Play,
-  FileText,
-  Settings,
-  Drama,
-  ArrowRight,
-  Crown,
-  MoreVertical,
-  Users,
-} from "lucide-react";
+import { Play, Drama, ArrowRight, Crown, MoreVertical } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { formatRelativeDate } from "@/lib/rehearsal-data";
@@ -18,37 +9,6 @@ import { loadRecentRehearsalsSafe } from "@/lib/rehearsal-runtime";
 export const Route = createFileRoute("/")({
   component: Index,
 });
-
-const QUICK = [
-  {
-    icon: FileText,
-    title: "Gestionar libretos",
-    desc: "Importa, edita y organiza tus guiones teatrales.",
-    cta: "Abrir libretos",
-    to: "/libretos",
-  },
-  {
-    icon: Settings,
-    title: "Configurar ensayo",
-    desc: "Define personajes, voces, emociones y dinámica.",
-    cta: "Configurar",
-    to: "/configuracion-ensayo",
-  },
-  {
-    icon: Users,
-    title: "Grupos",
-    desc: "Crea o únete a un grupo, asigna personajes y comparte el libreto.",
-    cta: "Abrir grupos",
-    to: "/grupos",
-  },
-  {
-    icon: Drama,
-    title: "Modo ensayo",
-    desc: "Los demás personajes se leen en voz alta con la voz de tu navegador.",
-    cta: "Comenzar",
-    to: "/ensayo",
-  },
-] as const;
 
 function Index() {
   const {
@@ -70,8 +30,8 @@ function Index() {
             <p className="text-[11px] tracking-[0.3em] text-muted-foreground uppercase mb-4">
               Bienvenido de nuevo
             </p>
-            <h1 className="font-display text-5xl lg:text-6xl leading-[1.05] mb-4">
-              Ensaya <span className="text-gradient-primary italic">IA</span>
+            <h1 className="font-display text-5xl lg:text-6xl leading-[1.05] mb-4 text-brand">
+              Ensaya <span className="italic">IA</span>
             </h1>
             <p className="text-muted-foreground max-w-md mb-8">
               Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de
@@ -86,29 +46,10 @@ function Index() {
             </Link>
           </div>
           <div className="hidden lg:flex justify-center">
-            <Drama className="w-56 h-56 text-primary/70" strokeWidth={0.8} />
+            <Drama className="w-56 h-56 text-brand" strokeWidth={0.8} />
           </div>
         </div>
       </section>
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-        {QUICK.map(({ icon: Icon, title, desc, cta, to }) => (
-          <Link
-            key={title}
-            to={to}
-            className="group rounded-xl bg-card border border-border/60 p-5 hover:border-primary/40 hover:shadow-glow transition"
-          >
-            <div className="w-11 h-11 rounded-full border border-primary/30 bg-primary/5 grid place-items-center mb-4 text-primary">
-              <Icon className="w-5 h-5" />
-            </div>
-            <h3 className="font-medium text-foreground mb-1">{title}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{desc}</p>
-            <span className="inline-flex items-center gap-1 text-sm text-primary group-hover:gap-2 transition-all">
-              {cta} <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </Link>
-        ))}
-      </div>
 
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-display">Ultimos ensayos</h2>

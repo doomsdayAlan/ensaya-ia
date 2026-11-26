@@ -71,7 +71,7 @@ export function ScriptPipelineProgress({
             <span>{progress?.message || "Procesamiento finalizado"}</span>
             <span className="font-medium text-foreground">{percent}%</span>
           </div>
-          <div className="w-full h-2 bg-surface-raised rounded-full overflow-hidden border border-border/40">
+          <div className="w-full h-2 bg-surface rounded-full overflow-hidden border border-border/40">
             <div
               className="h-full bg-primary-gradient transition-all duration-300 rounded-full"
               style={{ width: `${percent}%` }}
@@ -83,7 +83,7 @@ export function ScriptPipelineProgress({
         {result ? (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2.5">
-              <div className="bg-surface-raised border border-border/60 rounded-xl p-3 text-center">
+              <div className="bg-surface border border-border/60 rounded-xl p-3 text-center">
                 <div className="flex items-center justify-center text-primary gap-1 mb-1">
                   <Layers className="w-4 h-4" />
                   <span className="text-base font-bold text-foreground">
@@ -93,7 +93,7 @@ export function ScriptPipelineProgress({
                 <div className="text-[11px] text-muted-foreground">Escenas detectadas</div>
               </div>
 
-              <div className="bg-surface-raised border border-border/60 rounded-xl p-3 text-center">
+              <div className="bg-surface border border-border/60 rounded-xl p-3 text-center">
                 <div className="flex items-center justify-center text-primary gap-1 mb-1">
                   <Users className="w-4 h-4" />
                   <span className="text-base font-bold text-foreground">
@@ -103,7 +103,7 @@ export function ScriptPipelineProgress({
                 <div className="text-[11px] text-muted-foreground">Personajes únicos</div>
               </div>
 
-              <div className="bg-surface-raised border border-border/60 rounded-xl p-3 text-center">
+              <div className="bg-surface border border-border/60 rounded-xl p-3 text-center">
                 <div className="flex items-center justify-center text-primary gap-1 mb-1">
                   <MessageSquare className="w-4 h-4" />
                   <span className="text-base font-bold text-foreground">
@@ -141,7 +141,7 @@ export function ScriptPipelineProgress({
             </div>
 
             {/* Muestra de personajes */}
-            <div className="bg-surface-raised/40 border border-border/40 rounded-xl p-3 text-xs">
+            <div className="bg-surface/40 border border-border/40 rounded-xl p-3 text-xs">
               <span className="text-muted-foreground font-medium block mb-1.5">
                 Personajes detectados:
               </span>
@@ -171,7 +171,7 @@ export function ScriptPipelineProgress({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-medium border border-border rounded-lg hover:bg-surface-raised text-muted-foreground hover:text-foreground transition"
+                className="px-4 py-2 text-xs font-medium border border-border rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition"
               >
                 Ver en libretos
               </button>

@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TermsGate>
         <div className="min-h-screen flex bg-background text-foreground">
           <Sidebar />
-          <main className="flex-1 min-w-0 px-6 lg:px-10 py-6 lg:py-8 pb-24 lg:pb-8 overflow-x-hidden">
+          <main className="w-full min-w-0 flex-1 overflow-x-hidden px-6 py-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:py-8 md:pr-10 md:pb-8 md:pl-[13.25rem]">
             <OfflineBanner />
             {children}
           </main>

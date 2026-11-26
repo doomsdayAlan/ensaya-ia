@@ -24,7 +24,7 @@ export function AuthShell({
             Ensaya · Crea · Interpreta
           </p>
           <h2 className="font-display text-4xl leading-tight mb-4">
-            Tu escenario, <span className="italic text-gradient-primary">cuando quieras.</span>
+            Tu escenario, <span className="italic text-brand">cuando quieras.</span>
           </h2>
           <p className="text-muted-foreground text-sm">
             Practica escenas e interpreta tus personajes. Los demás papeles se leen con la voz de tu
@@ -86,7 +86,7 @@ export function Field({
           onChange={(e) => onChange(e.target.value)}
           required={required}
           autoComplete={autoComplete}
-          className={`w-full bg-surface border border-border/60 rounded-lg ${icon ? "pl-10" : "pl-3"} pr-3 py-2.5 text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition`}
+          className={`w-full bg-surface border border-input rounded-lg ${icon ? "pl-10" : "pl-3"} pr-3 py-2.5 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring transition`}
         />
       </div>
     </label>

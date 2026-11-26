@@ -4,7 +4,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
-import { Mic, Volume2, Bell, Shield, Download, Save, User, LogIn, Database } from "lucide-react";
+import {
+  Mic,
+  Volume2,
+  Bell,
+  Shield,
+  Download,
+  Save,
+  User,
+  LogIn,
+  Database,
+  ChevronDown,
+} from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   applyPrivacyToMyScripts,
   getPerfilUsuario,
@@ -14,6 +28,7 @@ import { requestNotificationPermission } from "@/lib/session-prefs";
 import { isAuthRequired, setAuthRequired } from "@/lib/app-config";
 import { getStoredUserCount } from "@/lib/local-auth";
 import { listBrowserVoiceNames, speakLine } from "@/lib/rehearsal-ai";
+import { THEME_OPTIONS, useThemePreference, type ThemePreference } from "@/lib/theme";
 
 export const Route = createFileRoute("/configuracion")({
   component: Configuracion,
@@ -29,6 +44,11 @@ const PRIVACY = [
   ["equipo", "Equipo"],
   ["publico", "Público"],
 ] as const;
+const THEME_CHOICES: Record<ThemePreference, string> = {
+  light: "Claro",
+  dark: "Oscuro",
+  system: "Según el sistema",
+};
 
 function Configuracion() {
   const queryClient = useQueryClient();
@@ -48,6 +68,7 @@ function Configuracion() {
   const [privacy, setPrivacy] = useState("privado");
   const [requireLogin, setRequireLogin] = useState(true);
   const [storedUsers, setStoredUsers] = useState(0);
+  const { preference: themePreference, setTheme } = useThemePreference();
 
   useEffect(() => {
     setRequireLogin(isAuthRequired());
@@ -163,6 +184,34 @@ function Configuracion() {
         </div>
       )}
 
+      <section className="bg-card border border-border/60 rounded-xl p-5 mb-5">
+        <h2 className="font-medium mb-4">Apariencia</h2>
+        <RadioGroup
+          value={themePreference}
+          onValueChange={(value) => {
+            if (value === "light" || value === "dark" || value === "system") setTheme(value);
+          }}
+          className="grid gap-2 sm:grid-cols-3"
+        >
+          {THEME_OPTIONS.map((value) => {
+            const selected = themePreference === value;
+            return (
+              <Label
+                key={value}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-normal ${
+                  selected
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-surface text-foreground hover:border-primary/40"
+                }`}
+              >
+                <RadioGroupItem value={value} />
+                {THEME_CHOICES[value]}
+              </Label>
+            );
+          })}
+        </RadioGroup>
+      </section>
+
       {profile && (
         <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
           <section className="bg-card border border-border/60 rounded-xl p-5">
@@ -183,7 +232,7 @@ function Configuracion() {
             <input
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              className="mt-1 mb-5 w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+              className="mt-1 mb-5 w-full bg-surface border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
               placeholder="Tu nombre artístico"
             />
             <div className="grid sm:grid-cols-2 gap-4">
@@ -341,25 +390,54 @@ function SelectBlock({
   options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(([optionValue]) => optionValue === value)?.[1] ?? value;
+
   return (
     <div>
       <label className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
         {title}
       </label>
-      <div className="relative mt-1">
-        <Icon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <select
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="w-full appearance-none bg-surface border border-border/60 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center gap-2 rounded-lg border border-input bg-surface px-3 py-2 text-left text-sm text-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
+          >
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">{selected}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={8}
+          className="max-h-64 w-[var(--radix-popover-trigger-width)] overflow-y-auto rounded-xl border-border bg-popover p-2 text-sm text-popover-foreground shadow-elevated"
         >
-          {options.map(([optionValue, label]) => (
-            <option key={optionValue} value={optionValue}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="flex flex-col gap-0.5">
+            {options.map(([optionValue, label]) => {
+              const active = optionValue === value;
+              return (
+                <button
+                  key={optionValue}
+                  type="button"
+                  onClick={() => {
+                    onChange(optionValue);
+                    setOpen(false);
+                  }}
+                  className={`rounded-lg px-3 py-2 text-left transition ${
+                    active
+                      ? "bg-accent font-medium text-accent-foreground"
+                      : "text-foreground hover:bg-accent/70"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -391,10 +469,10 @@ function SettingCard({
           <p className="text-sm text-muted-foreground">{desc}</p>
         </div>
         <span
-          className={`relative w-10 h-6 rounded-full transition ${enabled ? "bg-primary" : "bg-surface border border-border"}`}
+          className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${enabled ? "bg-primary" : "bg-input"}`}
         >
           <span
-            className={`absolute top-0.5 w-5 h-5 rounded-full bg-background transition ${enabled ? "left-[18px]" : "left-0.5"}`}
+            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full shadow-sm transition-transform ${enabled ? "translate-x-4 bg-primary-foreground" : "translate-x-0 bg-foreground"}`}
           />
         </span>
       </div>

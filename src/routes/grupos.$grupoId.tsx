@@ -127,7 +127,7 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
     <div className="space-y-4">
       {/* Modal de confirmación de reemplazo */}
       {scriptAConfirmar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 backdrop-blur-sm px-4">
           <div className="bg-card border border-border/60 rounded-2xl w-full max-w-sm p-6 shadow-elevated">
             <h3 className="font-medium text-foreground mb-2">¿Reemplazar el libreto actual?</h3>
             <p className="text-sm text-muted-foreground mb-1">
@@ -171,7 +171,7 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
       {showSelector && isAdmin && (
         <div className="bg-card border border-border/60 rounded-xl p-4">
           {tieneLibreto && (
-            <p className="text-xs text-amber-500/80 mb-3">
+            <p className="text-xs text-muted-foreground mb-3">
               Solo puede haber un libreto por grupo. Seleccionar uno nuevo reemplazará el actual.
             </p>
           )}
@@ -187,7 +187,7 @@ function TabMateriales({ detalle }: { detalle: GrupoDetalle }) {
                   key={s.id}
                   onClick={() => handleSeleccionarScript(s.id, s.title)}
                   disabled={isPending}
-                  className="flex items-center justify-between w-full px-3 py-2.5 bg-surface border border-border/60 rounded-lg text-sm text-left hover:border-primary/40 transition disabled:opacity-50"
+                  className="flex items-center justify-between w-full px-3 py-2.5 bg-surface border border-input rounded-lg text-sm text-left hover:border-primary/40 transition disabled:opacity-50"
                 >
                   <span className="font-medium">{s.title}</span>
                   {s.author && <span className="text-xs text-muted-foreground">{s.author}</span>}
@@ -432,7 +432,7 @@ function TabAnuncios({ detalle }: { detalle: GrupoDetalle }) {
         <div className="bg-card border border-border/60 rounded-xl p-4">
           <p className="text-xs text-muted-foreground mb-2">Publicar anuncio para el grupo</p>
           <textarea
-            className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-primary/60 resize-none min-h-[80px]"
+            className="w-full bg-surface border border-input rounded-lg px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring resize-none min-h-[80px]"
             placeholder="Escribe un mensaje para todos los miembros..."
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -557,7 +557,7 @@ function TabGrabaciones({ detalle }: { detalle: GrupoDetalle }) {
           <select
             value={sceneFilter}
             onChange={(event) => setSceneFilter(event.target.value)}
-            className="text-xs bg-surface border border-border/60 rounded-lg px-2 py-1.5"
+            className="text-xs bg-surface border border-input rounded-lg px-2 py-1.5"
           >
             <option value="todas">Todas las escenas</option>
             {escenas.map(([id, title]) => (
@@ -669,7 +669,7 @@ function GrupoDetallePage() {
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs text-muted-foreground">Código de invitación:</span>
-                  <span className="text-xs font-mono tracking-widest text-foreground bg-surface border border-border/60 rounded px-2 py-0.5">
+                  <span className="text-xs font-mono tracking-widest text-foreground bg-surface border border-input rounded px-2 py-0.5">
                     {detalle.grupo.codigo_invitacion}
                   </span>
                   <button

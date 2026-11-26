@@ -13,8 +13,19 @@ import {
   SkipForward,
   RotateCcw,
   Play,
+  Pause,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { TopBar } from "@/components/TopBar";
 import {
   getPerfilUsuario,
@@ -38,7 +49,6 @@ import {
   effectiveMatchDifficulty,
   evaluateSpokenLine,
   listenForLine,
-  matchThreshold,
   resolveRehearsalVoice,
   scoreRehearsal,
   speakLine,
@@ -150,6 +160,10 @@ function Ensayo() {
   const failedLineIdRef = useRef<string | null>(null);
   const finalEvalTimerRef = useRef<number | null>(null);
   const accumulatedFinalRef = useRef("");
+  const playbackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackTimerRef = useRef<number | null>(null);
+  const isPausedRef = useRef(false);
+  const listenGenerationRef = useRef(0);
 
   const [activeConfig, setActiveConfig] = useState<ActiveRehearsal | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -158,9 +172,11 @@ function Ensayo() {
     setSessionReady(true);
   }, []);
   const [connectionStatus, setConnectionStatus] = useState(
-    "El botón redondo inicia o detiene el ensayo.",
+    "El botón redondo inicia o pausa el ensayo.",
   );
   const [isRehearsing, setIsRehearsing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [closingMessage, setClosingMessage] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -302,17 +318,38 @@ function Ensayo() {
     }
   };
 
+  const stopPlaybackAudio = () => {
+    if (playbackTimerRef.current != null) {
+      window.clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+    const audio = playbackAudioRef.current;
+    playbackAudioRef.current = null;
+    if (!audio) return;
+    audio.onended = null;
+    audio.onerror = null;
+    audio.pause();
+  };
+  const stopPlaybackAudioRef = useRef(stopPlaybackAudio);
+  stopPlaybackAudioRef.current = stopPlaybackAudio;
+
   const playAudioUrl = (url: string) =>
     new Promise<void>((resolve) => {
+      stopPlaybackAudio();
       const audio = new Audio(url);
+      playbackAudioRef.current = audio;
       let done = false;
       const finish = () => {
         if (done) return;
         done = true;
-        window.clearTimeout(timer);
+        if (playbackTimerRef.current != null) {
+          window.clearTimeout(playbackTimerRef.current);
+          playbackTimerRef.current = null;
+        }
+        if (playbackAudioRef.current === audio) playbackAudioRef.current = null;
         resolve();
       };
-      const timer = window.setTimeout(finish, 20_000);
+      playbackTimerRef.current = window.setTimeout(finish, 20_000);
       audio.onended = finish;
       audio.onerror = finish;
       void audio.play().catch(finish);
@@ -392,6 +429,7 @@ function Ensayo() {
   };
 
   const stopListen = () => {
+    listenGenerationRef.current += 1;
     if (finalEvalTimerRef.current != null) {
       window.clearTimeout(finalEvalTimerRef.current);
       finalEvalTimerRef.current = null;
@@ -432,8 +470,11 @@ function Ensayo() {
   };
 
   const finishRehearsal = async (reason: "done" | "manual") => {
+    isPausedRef.current = false;
+    setIsPaused(false);
     stopListen();
     stopSpeaking();
+    stopPlaybackAudio();
     setIsRehearsing(false);
     setIsSpeaking(false);
 
@@ -693,6 +734,7 @@ function Ensayo() {
     advancingRef.current = true;
     stopListen();
     stopSpeaking();
+    stopPlaybackAudio();
     setIsSpeaking(false);
     setTranscript("");
     failedLineIdRef.current = null;
@@ -723,7 +765,7 @@ function Ensayo() {
   };
 
   const applySpokenText = (text: string, fromTyping = false) => {
-    if (!currentLine) return false;
+    if (isPausedRef.current || !currentLine) return false;
     const verdict = evaluateSpokenLine(text, currentLine.text, matchDifficulty);
     setTranscript(text);
     setLastScore(verdict.score);
@@ -766,7 +808,7 @@ function Ensayo() {
   };
 
   useEffect(() => {
-    if (!isRehearsing || !currentLine) return;
+    if (!isRehearsing || isPaused || !currentLine) return;
 
     // Modo lectura: TTS de todas las lineas, sin exigir microfono para avanzar.
     if (isLecturaMode) {
@@ -808,6 +850,7 @@ function Ensayo() {
         cancelled = true;
         setIsSpeaking(false);
         stopSpeaking();
+        stopPlaybackAudio();
       };
     }
 
@@ -828,8 +871,10 @@ function Ensayo() {
       stopListen();
       void startTake();
       accumulatedFinalRef.current = "";
+      const generation = listenGenerationRef.current;
       const handle = listenForLine({
         onTranscript: (text, isFinal) => {
+          if (generation !== listenGenerationRef.current || isPausedRef.current) return;
           // Interinos solo actualizan el teleprompter.
           if (!isFinal) {
             setTranscript(text);
@@ -844,6 +889,7 @@ function Ensayo() {
           }
           finalEvalTimerRef.current = window.setTimeout(() => {
             finalEvalTimerRef.current = null;
+            if (generation !== listenGenerationRef.current || isPausedRef.current) return;
             const attempt = accumulatedFinalRef.current;
             // Reinicia antes de evaluar el siguiente intento de la misma linea.
             accumulatedFinalRef.current = "";
@@ -916,10 +962,12 @@ function Ensayo() {
       cancelled = true;
       setIsSpeaking(false);
       stopSpeaking();
+      stopPlaybackAudio();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isRehearsing,
+    isPaused,
     activeLineIndex,
     currentLine?.id,
     isHumanTurn,
@@ -934,18 +982,66 @@ function Ensayo() {
     return () => {
       stopListenRef.current();
       stopSpeaking();
+      stopPlaybackAudioRef.current();
     };
   }, []);
 
-  const handleToggleRecording = () => {
-    if (isLecturaMode) {
-      if (isRehearsing) {
-        void finishRehearsal("manual");
-        return;
+  const pauseRehearsal = () => {
+    if (!isRehearsing || isPausedRef.current) return;
+    isPausedRef.current = true;
+    stopListen();
+    stopSpeaking();
+    stopPlaybackAudio();
+    setIsSpeaking(false);
+    setIsListening(false);
+    setIsPaused(true);
+    setConnectionStatus("En pausa");
+  };
+
+  const resumeRehearsal = () => {
+    if (!isRehearsing || !isPausedRef.current) return;
+    isPausedRef.current = false;
+    setIsPaused(false);
+  };
+
+  const pauseRehearsalRef = useRef(pauseRehearsal);
+  const resumeRehearsalRef = useRef(resumeRehearsal);
+  pauseRehearsalRef.current = pauseRehearsal;
+  resumeRehearsalRef.current = resumeRehearsal;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== " " && event.code !== "Space") return;
+      if (event.repeat || confirmFinish) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) {
+          return;
+        }
       }
+      if (!isRehearsing) return;
+      event.preventDefault();
+      if (isPausedRef.current) resumeRehearsalRef.current();
+      else pauseRehearsalRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmFinish, isRehearsing]);
+
+  const handleToggleRecording = () => {
+    if (isRehearsing) {
+      if (isPaused) resumeRehearsal();
+      else pauseRehearsal();
+      return;
+    }
+
+    if (isLecturaMode) {
       if (typeof window !== "undefined") {
         window.speechSynthesis.getVoices();
       }
+      isPausedRef.current = false;
+      setIsPaused(false);
       lineNotesRef.current = [];
       setIsRehearsing(true);
       setConnectionStatus("Lectura iniciada. Se leen todas las líneas en voz alta.");
@@ -957,24 +1053,11 @@ function Ensayo() {
       toast.error(speechBrowserHint());
     }
 
-    if (isRehearsing && isHumanTurn) {
-      const verdict = evaluateSpokenLine(transcript, currentLine?.text ?? "", matchDifficulty);
-      if (verdict.score >= matchThreshold(matchDifficulty) * 0.75) {
-        advance({ score: verdict.score });
-        return;
-      }
-      advance({ skipped: true, score: verdict.score });
-      return;
-    }
-
-    if (isRehearsing) {
-      void finishRehearsal("manual");
-      return;
-    }
-
     if (typeof window !== "undefined") {
       window.speechSynthesis.getVoices();
     }
+    isPausedRef.current = false;
+    setIsPaused(false);
     lineNotesRef.current = [];
     setIsRehearsing(true);
     setConnectionStatus("Ensayo iniciado. Los demás papeles se leen con la voz del navegador.");
@@ -994,6 +1077,7 @@ function Ensayo() {
   const handleSkipBackward = () => {
     stopListen();
     stopSpeaking();
+    stopPlaybackAudio();
     setIsSpeaking(false);
     setTranscript("");
     repeatedRef.current += 1;
@@ -1002,8 +1086,10 @@ function Ensayo() {
   };
 
   const handleReset = () => {
+    isPausedRef.current = false;
     stopListen();
     stopSpeaking();
+    stopPlaybackAudio();
     scoresRef.current = [];
     skippedRef.current = 0;
     repeatedRef.current = 0;
@@ -1014,12 +1100,13 @@ function Ensayo() {
     setTypedLine("");
     setLastScore(null);
     setIsRehearsing(false);
+    setIsPaused(false);
     setIsSpeaking(false);
     setConnectionStatus("Escena reiniciada. Pulsa el micrófono para volver a empezar.");
   };
 
   const submitTypedLine = () => {
-    if (!isRehearsing || !isHumanTurn || !currentLine || isLecturaMode) return;
+    if (!isRehearsing || isPaused || !isHumanTurn || !currentLine || isLecturaMode) return;
     const text = typedLine.trim();
     if (!text) return;
     applySpokenText(text, true);
@@ -1027,7 +1114,9 @@ function Ensayo() {
 
   return (
     <AppShell>
-      <TopBar back={{ to: "/", label: "Modo ensayo" }} />
+      <TopBar
+        back={{ to: "/", label: "Modo ensayo", className: "text-brand hover:text-primary" }}
+      />
       {closingMessage ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 px-6">
           <p className="rounded-xl border border-border/60 bg-card px-5 py-4 text-sm">
@@ -1035,6 +1124,23 @@ function Ensayo() {
           </p>
         </div>
       ) : null}
+      <AlertDialog open={confirmFinish} onOpenChange={setConfirmFinish}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Finalizar el ensayo?</AlertDialogTitle>
+            <AlertDialogDescription>Se guardará tu avance hasta esta línea.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:opacity-90"
+              onClick={() => void finishRehearsal("manual")}
+            >
+              Finalizar ensayo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {loading && (
         <div className="bg-card border border-border/60 rounded-xl p-4 mb-5 text-sm text-muted-foreground">
@@ -1085,8 +1191,8 @@ function Ensayo() {
         </div>
         <button
           type="button"
-          onClick={() => void finishRehearsal("manual")}
-          className="ml-auto inline-flex items-center gap-2 border border-destructive/50 text-destructive rounded-lg px-3 py-2 text-sm hover:bg-destructive/10"
+          onClick={() => setConfirmFinish(true)}
+          className="ml-auto inline-flex items-center gap-2 bg-destructive text-destructive-foreground rounded-lg px-3 py-2 text-sm hover:opacity-90"
         >
           <Square className="w-3.5 h-3.5 fill-current" /> Finalizar ensayo
         </button>
@@ -1107,26 +1213,34 @@ function Ensayo() {
           <div className="bg-card border border-border/60 rounded-xl p-4 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs">
               <div
-                className={`flex items-center gap-1.5 ${isListening ? "text-primary" : isSpeaking ? "text-foreground" : "text-muted-foreground"}`}
+                className={`flex items-center gap-1.5 ${isPaused ? "text-foreground" : isListening ? "text-primary" : isSpeaking ? "text-foreground" : "text-muted-foreground"}`}
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
-                    isListening
-                      ? "bg-primary animate-pulse"
-                      : isSpeaking
-                        ? "bg-foreground"
-                        : "bg-muted-foreground/50"
+                    isPaused
+                      ? "bg-foreground"
+                      : isListening
+                        ? "bg-primary animate-pulse"
+                        : isSpeaking
+                          ? "bg-foreground"
+                          : "bg-muted-foreground/50"
                   }`}
                 />{" "}
-                {isSpeaking
-                  ? "Voz del navegador"
-                  : isListening
-                    ? "Escuchando…"
-                    : isRehearsing
-                      ? "En silencio"
-                      : "Listo"}
+                {isPaused
+                  ? "En pausa"
+                  : isSpeaking
+                    ? "Voz del navegador"
+                    : isListening
+                      ? "Escuchando…"
+                      : isRehearsing
+                        ? "En silencio"
+                        : "Listo"}
               </div>
-              {isListening ? (
+              {isPaused ? (
+                <p className="text-muted-foreground mt-1">
+                  En pausa. La línea actual y el avance se conservan.
+                </p>
+              ) : isListening ? (
                 <>
                   <MicLevelMeter stream={micStream} />
                   <p className="text-muted-foreground mt-1">
@@ -1140,7 +1254,7 @@ function Ensayo() {
                 </p>
               ) : (
                 <p className="text-muted-foreground mt-1">
-                  El botón redondo inicia o detiene el ensayo. No hace falta mantenerlo pulsado.
+                  El botón redondo inicia o pausa el ensayo. Finalizar ensayo guarda el avance.
                 </p>
               )}
               <div className="font-mono text-foreground mt-0.5">{connectionStatus}</div>
@@ -1166,34 +1280,41 @@ function Ensayo() {
             <div className="flex items-center gap-2">
               <ControlBtn icon={SkipBack} label="Retroceder línea" onClick={handleSkipBackward} />
               <button
+                type="button"
                 onClick={handleToggleRecording}
                 aria-label={
-                  isLecturaMode
-                    ? isRehearsing
-                      ? "Detener lectura"
-                      : "Iniciar lectura"
-                    : isRehearsing && isHumanTurn
-                      ? "Evaluar la línea y avanzar"
-                      : isRehearsing
-                        ? "Detener ensayo"
-                        : "Iniciar ensayo con micrófono"
+                  !isRehearsing
+                    ? isLecturaMode
+                      ? "Iniciar lectura"
+                      : "Iniciar ensayo con micrófono"
+                    : isPaused
+                      ? "Reanudar ensayo"
+                      : "Pausar ensayo"
                 }
-                className={`w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 transition-all ${
-                  isRehearsing
-                    ? "bg-destructive text-destructive-foreground ring-destructive/20"
-                    : "bg-primary-gradient text-primary-foreground ring-primary/20"
-                }`}
+                className="w-14 h-14 rounded-full grid place-items-center shadow-glow ring-4 ring-primary/20 bg-primary-gradient text-primary-foreground transition-all"
               >
-                {isRehearsing ? (
-                  <Square className="w-5 h-5 fill-current" />
-                ) : isLecturaMode ? (
+                {!isRehearsing ? (
+                  isLecturaMode ? (
+                    <Play className="w-6 h-6 fill-current" />
+                  ) : (
+                    <Mic className="w-6 h-6" />
+                  )
+                ) : isPaused ? (
                   <Play className="w-6 h-6 fill-current" />
                 ) : (
-                  <Mic className="w-6 h-6" />
+                  <Pause className="w-6 h-6 fill-current" />
                 )}
               </button>
               <ControlBtn icon={SkipForward} label="Siguiente línea" onClick={handleSkipForward} />
               <ControlBtn icon={RotateCcw} label="Reiniciar" onClick={handleReset} />
+              <button
+                type="button"
+                aria-label="Finalizar ensayo"
+                onClick={() => setConfirmFinish(true)}
+                className="inline-flex items-center gap-2 bg-destructive text-destructive-foreground rounded-lg px-3 py-2 text-sm hover:opacity-90"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" /> Finalizar ensayo
+              </button>
             </div>
             {!isLecturaMode && (
               <div className="w-full">
@@ -1203,7 +1324,7 @@ function Ensayo() {
                 <div className="mt-1 flex gap-2">
                   <input
                     value={typedLine}
-                    disabled={!isRehearsing || !isHumanTurn}
+                    disabled={!isRehearsing || isPaused || !isHumanTurn}
                     onChange={(event) => setTypedLine(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
@@ -1218,11 +1339,11 @@ function Ensayo() {
                           ? "Espera el turno de una persona o usa siguiente línea"
                           : "Pulsa el botón redondo para empezar"
                     }
-                    className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                    className="flex-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring disabled:opacity-50"
                   />
                   <button
                     type="button"
-                    disabled={!isRehearsing || !isHumanTurn || !typedLine.trim()}
+                    disabled={!isRehearsing || isPaused || !isHumanTurn || !typedLine.trim()}
                     onClick={submitTypedLine}
                     className="inline-flex items-center gap-2 border border-primary/40 text-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
                   >
@@ -1253,7 +1374,7 @@ function Ensayo() {
                   name={`${character.name} (${roleLabelFor(character.id, sessionRoles)})`}
                   status={character.id === currentLine?.character_id ? "Activo" : "En espera"}
                   muted={character.id === selectedCharacter?.id}
-                  playing={isRehearsing && character.id === currentLine?.character_id}
+                  playing={isRehearsing && !isPaused && character.id === currentLine?.character_id}
                 />
               ))}
             </div>
@@ -1285,13 +1406,15 @@ function Ensayo() {
                 Estado
               </div>
               <p className="text-xs leading-relaxed text-foreground min-h-10">
-                {isLecturaMode
-                  ? "Modo lectura: se reproducen todas las líneas con la voz del navegador."
-                  : isSpeaking
-                    ? "Se está leyendo la línea del otro personaje. Cuando termine, te toca a ti."
-                    : isListening
-                      ? "Habla tu línea. El ensayo avanza cuando reconoce las palabras clave, aunque no sea literal."
-                      : "Pulsa el micrófono para ensayar: los otros papeles se leen con la voz de tu navegador."}
+                {isPaused
+                  ? "En pausa. La línea actual y el avance se conservan."
+                  : isLecturaMode
+                    ? "Modo lectura: se reproducen todas las líneas con la voz del navegador."
+                    : isSpeaking
+                      ? "Se está leyendo la línea del otro personaje. Cuando termine, te toca a ti."
+                      : isListening
+                        ? "Habla tu línea. El ensayo avanza cuando reconoce las palabras clave, aunque no sea literal."
+                        : "Pulsa el micrófono para ensayar: los otros papeles se leen con la voz de tu navegador."}
               </p>
             </div>
           </Card>
@@ -1365,7 +1488,7 @@ function LineCard({
     <div>
       <p className="text-[10px] tracking-[0.25em] text-muted-foreground uppercase mb-2">{title}</p>
       <div
-        className={`${active ? "border-2 border-primary/60 bg-primary/5 shadow-glow" : "border border-border/60 bg-card"} ${
+        className={`${active ? "border-2 border-primary bg-accent text-accent-foreground" : "border border-border bg-surface text-foreground"} ${
           faded ? "opacity-70" : ""
         } rounded-xl p-5 relative`}
       >
@@ -1415,7 +1538,7 @@ function ControlBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg border border-border/60 bg-surface hover:border-primary/40 hover:text-primary transition disabled:opacity-50 disabled:hover:border-border/60 disabled:hover:text-inherit cursor-pointer"
+      className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg border border-input bg-surface hover:border-primary/40 hover:text-primary transition disabled:opacity-50 disabled:hover:border-input disabled:hover:text-inherit cursor-pointer"
     >
       <Icon className="w-4 h-4" />
       <span className="text-[10px] text-muted-foreground">{label}</span>

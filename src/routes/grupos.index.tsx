@@ -54,7 +54,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
     nombre.trim().length >= 2 && (!usarCodigoPropio || codigoCustom.trim().length === 10);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 backdrop-blur-sm px-4">
       <div className="bg-card border border-border/60 rounded-2xl w-full max-w-md p-6 shadow-elevated">
         <h2 className="font-display text-2xl mb-5">Crear grupo</h2>
 
@@ -62,7 +62,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
           <div>
             <label className="block text-xs text-muted-foreground mb-1">Nombre del grupo *</label>
             <input
-              className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/60"
+              className="w-full bg-surface border border-input rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
               placeholder="Ej. Compañía Ensaya IA"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
@@ -76,7 +76,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
               type="number"
               min={2}
               max={30}
-              className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/60"
+              className="w-full bg-surface border border-input rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
               value={maxMiembros}
               onChange={(e) => setMaxMiembros(Math.max(2, Math.min(30, Number(e.target.value))))}
             />
@@ -96,7 +96,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
             {usarCodigoPropio ? (
               <div className="flex gap-2">
                 <input
-                  className="flex-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm font-mono tracking-widest text-foreground focus:outline-none focus:border-primary/60"
+                  className="flex-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm font-mono tracking-widest text-foreground focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
                   placeholder="10 caracteres"
                   value={codigoCustom}
                   onChange={(e) => setCodigoCustom(e.target.value.toUpperCase().slice(0, 10))}
@@ -105,7 +105,7 @@ function ModalCrear({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => setCodigoCustom(generarCodigoLocal())}
-                  className="p-2 rounded-lg bg-surface border border-border/60 text-muted-foreground hover:text-foreground transition"
+                  className="p-2 rounded-lg bg-surface border border-input text-muted-foreground hover:text-foreground transition"
                   title="Generar aleatorio"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -154,14 +154,14 @@ function ModalUnirse({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 backdrop-blur-sm px-4">
       <div className="bg-card border border-border/60 rounded-2xl w-full max-w-sm p-6 shadow-elevated">
         <h2 className="font-display text-2xl mb-5">Unirse a grupo</h2>
 
         <div>
           <label className="block text-xs text-muted-foreground mb-1">Código de invitación</label>
           <input
-            className="w-full bg-surface border border-border/60 rounded-lg px-3 py-3 text-sm font-mono tracking-widest text-foreground text-center focus:outline-none focus:border-primary/60"
+            className="w-full bg-surface border border-input rounded-lg px-3 py-3 text-sm font-mono tracking-widest text-foreground text-center focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
             placeholder="XXXXXXXXXX"
             value={codigo}
             onChange={(e) => setCodigo(e.target.value.toUpperCase().slice(0, 10))}

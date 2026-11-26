@@ -27,6 +27,16 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -167,6 +177,7 @@ function Libretos() {
   const [pasteTitle, setPasteTitle] = useState("");
   const [pasteText, setPasteText] = useState("");
   const [confirmingImport, setConfirmingImport] = useState(false);
+  const [pendingHardDelete, setPendingHardDelete] = useState<ScriptRecord | null>(null);
 
   const { data: currentUserId } = useQuery({
     queryKey: ["current-user-id"],
@@ -375,7 +386,7 @@ function Libretos() {
     mutationFn: restoreScript,
     onSuccess: () => {
       refreshScripts();
-      setActiveTab("Mis libretos");
+      setActiveTab("Todos");
       toast.success("Libreto restaurado");
     },
     onError: (error) =>
@@ -384,9 +395,12 @@ function Libretos() {
 
   const hardDeleteMutation = useMutation({
     mutationFn: deleteScriptPermanently,
-    onSuccess: () => {
-      refreshScripts();
-      setSelectedId(null);
+    onSuccess: (_result, script) => {
+      queryClient.setQueryData<ScriptRecord[]>(["scripts", "with-trash"], (current) =>
+        (current ?? []).filter((item) => item.id !== script.id),
+      );
+      setSelectedId((current) => (current === script.id ? null : current));
+      setPendingHardDelete(null);
       toast.success("Libreto eliminado definitivamente");
     },
     onError: (error) =>
@@ -666,7 +680,7 @@ function Libretos() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Buscar libretos..."
-              className="bg-surface border border-border/60 rounded-lg pl-9 pr-3 py-2 text-sm w-64 focus:outline-none focus:border-primary/50"
+              className="bg-surface border border-input rounded-lg pl-9 pr-3 py-2 text-sm w-64 focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
             />
           </div>
           <button
@@ -718,14 +732,14 @@ function Libretos() {
               value={pasteTitle}
               onChange={(event) => setPasteTitle(event.target.value)}
               placeholder="Título (opcional)"
-              className="w-full bg-background border border-border/60 rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm"
             />
             <textarea
               value={pasteText}
               onChange={(event) => setPasteText(event.target.value)}
               placeholder={"PERSONAJE:\nDiálogo..."}
               rows={12}
-              className="w-full bg-background border border-border/60 rounded-lg px-3 py-2 text-sm font-mono"
+              className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm font-mono"
             />
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -761,7 +775,7 @@ function Libretos() {
             <input
               value={reviewTitle}
               onChange={(event) => setReviewTitle(event.target.value)}
-              className="w-full bg-background border border-border/60 rounded-lg px-3 py-2 text-sm"
+              className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm"
               placeholder="Título del libreto"
             />
             <div className="space-y-2">
@@ -776,7 +790,7 @@ function Libretos() {
                       next[index] = event.target.value;
                       setReviewNames(next);
                     }}
-                    className="bg-background border border-border/60 rounded-lg px-3 py-2 text-sm"
+                    className="bg-background border border-input rounded-lg px-3 py-2 text-sm"
                   />
                 ))}
               </div>
@@ -787,7 +801,7 @@ function Libretos() {
                 value={reviewDialogue}
                 onChange={(event) => setReviewDialogue(event.target.value)}
                 rows={14}
-                className="w-full bg-background border border-border/60 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -838,7 +852,7 @@ function Libretos() {
                   }}
                   className={`px-3 py-1.5 text-sm rounded-md transition ${
                     activeTab === tab
-                      ? "bg-primary/15 text-primary"
+                      ? "bg-accent text-accent-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -850,7 +864,7 @@ function Libretos() {
               <select
                 value={sortMode}
                 onChange={(event) => setSortMode(event.target.value as SortMode)}
-                className="text-sm text-muted-foreground border border-border/60 rounded-md px-2.5 py-1.5 bg-surface focus:outline-none focus:border-primary/50"
+                className="text-sm text-foreground border border-input rounded-md px-2.5 py-1.5 bg-surface focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
               >
                 <option value="recent">Mas recientes</option>
                 <option value="title">Título</option>
@@ -859,13 +873,13 @@ function Libretos() {
               <div className="flex border border-border/60 rounded-md overflow-hidden bg-surface">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-1.5 ${viewMode === "grid" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
+                  className={`p-1.5 ${viewMode === "grid" ? "text-accent-foreground bg-accent" : "text-muted-foreground"}`}
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-1.5 ${viewMode === "list" ? "text-primary bg-primary/10" : "text-muted-foreground"}`}
+                  className={`p-1.5 ${viewMode === "list" ? "text-accent-foreground bg-accent" : "text-muted-foreground"}`}
                 >
                   <List className="w-4 h-4" />
                 </button>
@@ -905,11 +919,13 @@ function Libretos() {
                   favoriteMutation.mutate(script);
                 }}
                 onEdit={() => {
+                  if (script.deleted_at) return;
                   setSelectedId(script.id);
                   setEditing(true);
                 }}
                 onDuplicate={() => duplicateMutation.mutate(script.id)}
                 onRehearse={() => {
+                  if (script.deleted_at) return;
                   activeMutation.mutate(script.id);
                   void nav({
                     to: "/configuracion-ensayo",
@@ -917,6 +933,8 @@ function Libretos() {
                   });
                 }}
                 onTrash={() => deleteMutation.mutate(script)}
+                onRestore={() => restoreMutation.mutate(script)}
+                onHardDelete={() => setPendingHardDelete(script)}
               />
             ))}
           </div>
@@ -932,7 +950,7 @@ function Libretos() {
                 <DetailIcon className="w-16 h-16 text-primary/60" strokeWidth={0.8} />
               </div>
 
-              {!editing ? (
+              {!editing || isTrash ? (
                 <>
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -1069,7 +1087,7 @@ function Libretos() {
                       onClick={() => restoreMutation.mutate(selectedScript)}
                     />
                     <button
-                      onClick={() => hardDeleteMutation.mutate(selectedScript)}
+                      onClick={() => setPendingHardDelete(selectedScript)}
                       className="w-full flex items-center gap-2 text-sm p-2.5 rounded-lg text-destructive hover:bg-destructive/10 transition"
                     >
                       <Trash2 className="w-4 h-4" /> Eliminar definitivamente
@@ -1094,6 +1112,30 @@ function Libretos() {
           )}
         </aside>
       </div>
+      <AlertDialog
+        open={pendingHardDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingHardDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar definitivamente</AlertDialogTitle>
+            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:opacity-90"
+              onClick={() => {
+                if (pendingHardDelete) hardDeleteMutation.mutate(pendingHardDelete);
+              }}
+            >
+              Eliminar definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
@@ -1108,6 +1150,8 @@ function ScriptCard({
   onDuplicate,
   onRehearse,
   onTrash,
+  onRestore,
+  onHardDelete,
 }: {
   script: ScriptRecord;
   active: boolean;
@@ -1118,6 +1162,8 @@ function ScriptCard({
   onDuplicate: () => void;
   onRehearse: () => void;
   onTrash: () => void;
+  onRestore: () => void;
+  onHardDelete: () => void;
 }) {
   const Icon = getScriptIcon(script);
 
@@ -1125,7 +1171,7 @@ function ScriptCard({
     <div
       onClick={onSelect}
       className={`bg-card border rounded-xl p-4 transition cursor-pointer ${
-        active ? "border-primary/60 shadow-glow" : "border-border/60 hover:border-primary/30"
+        active ? "border-2 border-primary" : "border-border/60 hover:border-primary/30"
       } ${compact ? "space-y-3" : "flex items-center gap-4"}`}
     >
       <div className="w-14 h-14 rounded-lg bg-stage border border-border grid place-items-center text-primary shrink-0">
@@ -1172,10 +1218,24 @@ function ScriptCard({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-            <DropdownMenuItem onClick={onEdit}>Editar</DropdownMenuItem>
-            <DropdownMenuItem onClick={onDuplicate}>Duplicar</DropdownMenuItem>
-            <DropdownMenuItem onClick={onRehearse}>Usar en ensayo</DropdownMenuItem>
-            <DropdownMenuItem onClick={onTrash}>Mover a papelera</DropdownMenuItem>
+            {script.deleted_at ? (
+              <>
+                <DropdownMenuItem onClick={onRestore}>Restaurar</DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={onHardDelete}
+                >
+                  Eliminar definitivamente
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <>
+                <DropdownMenuItem onClick={onEdit}>Editar</DropdownMenuItem>
+                <DropdownMenuItem onClick={onDuplicate}>Duplicar</DropdownMenuItem>
+                <DropdownMenuItem onClick={onRehearse}>Usar en ensayo</DropdownMenuItem>
+                <DropdownMenuItem onClick={onTrash}>Mover a papelera</DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -1237,7 +1297,7 @@ function EditForm({
             min={1}
             value={value.act_count}
             onChange={(event) => onChange({ ...value, act_count: Number(event.target.value) || 1 })}
-            className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+            className="w-full mt-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
           />
         </div>
       </div>
@@ -1249,7 +1309,7 @@ function EditForm({
           value={value.description}
           onChange={(event) => onChange({ ...value, description: event.target.value })}
           rows={4}
-          className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-primary/50"
+          className="w-full mt-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
         />
       </div>
       <div>
@@ -1264,7 +1324,7 @@ function EditForm({
           placeholder={
             "Actor:\nEscribe aquí tu línea.\n\nCompañero:\nRespuesta del otro personaje."
           }
-          className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm resize-y min-h-40 focus:outline-none focus:border-primary/50 font-mono"
+          className="w-full mt-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm resize-y min-h-40 focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring font-mono"
         />
         <p className="text-[11px] text-muted-foreground mt-1">
           Una línea por párrafo. Formato: Nombre: y el texto debajo o en la misma línea.
@@ -1306,7 +1366,7 @@ function TextField({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+        className="w-full mt-1 bg-surface border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
       />
     </div>
   );

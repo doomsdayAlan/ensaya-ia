@@ -73,7 +73,7 @@ function CharacterVoiceEditor({
         <input
           value={nextName}
           onChange={(event) => setNextName(event.target.value)}
-          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+          className="mt-1 w-full bg-surface border border-input rounded-lg px-2 py-1.5 text-sm text-foreground"
         />
       </label>
       <label className="text-xs text-muted-foreground">
@@ -81,7 +81,7 @@ function CharacterVoiceEditor({
         <select
           value={nextVoice}
           onChange={(event) => setNextVoice(event.target.value)}
-          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+          className="mt-1 w-full bg-surface border border-input rounded-lg px-2 py-1.5 text-sm text-foreground"
         >
           {voices.map((option) => (
             <option key={option} value={option}>
@@ -95,7 +95,7 @@ function CharacterVoiceEditor({
         <select
           value={nextEmotion}
           onChange={(event) => setNextEmotion(event.target.value)}
-          className="mt-1 w-full bg-surface border border-border/60 rounded-lg px-2 py-1.5 text-sm text-foreground"
+          className="mt-1 w-full bg-surface border border-input rounded-lg px-2 py-1.5 text-sm text-foreground"
         >
           {EMOTIONS.map((option) => (
             <option key={option} value={option}>
@@ -144,11 +144,14 @@ const MODES = [
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={on}
       onClick={() => onChange(!on)}
-      className={`relative w-10 h-6 rounded-full transition ${on ? "bg-primary" : "bg-surface border border-border"}`}
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent ${on ? "bg-primary" : "bg-input"}`}
     >
       <span
-        className={`absolute top-0.5 w-5 h-5 rounded-full bg-background transition ${on ? "left-[18px]" : "left-0.5"}`}
+        className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full shadow-sm transition-transform ${on ? "translate-x-4 bg-primary-foreground" : "translate-x-0 bg-foreground"}`}
       />
     </button>
   );
@@ -635,7 +638,7 @@ function ConfigEnsayo() {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2 mb-4 bg-surface-raised p-2 rounded-xl border border-border/60">
+                  <div className="flex items-center gap-2 mb-4 bg-surface p-2 rounded-xl border border-border/60">
                     <span className="text-xs font-medium text-muted-foreground pl-2">
                       Personas físicas disponibles:
                     </span>
@@ -678,7 +681,7 @@ function ConfigEnsayo() {
                               className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
                                 human.actorIndex === 1
                                   ? "bg-primary/15 text-primary border-primary/30"
-                                  : "bg-surface-raised text-foreground border-border/60"
+                                  : "bg-surface text-foreground border-border/60"
                               }`}
                             >
                               {charName}
@@ -757,7 +760,7 @@ function ConfigEnsayo() {
                   value={newCharacterName}
                   onChange={(event) => setNewCharacterName(event.target.value)}
                   placeholder="Nombre del personaje"
-                  className="flex-1 min-w-40 bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                  className="flex-1 min-w-40 bg-surface border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
                 />
                 <button
                   type="submit"
@@ -1121,7 +1124,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full mt-1 bg-surface border border-border/60 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50"
+        className="w-full mt-1 bg-surface border border-input rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring"
       >
         {loading && <option value="">Cargando...</option>}
         {!loading && options.length === 0 && <option value="">Sin opciones</option>}

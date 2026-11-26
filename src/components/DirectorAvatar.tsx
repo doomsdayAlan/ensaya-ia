@@ -349,18 +349,18 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
       <svg viewBox="0 0 160 160" className="relative z-[1] w-full h-full drop-shadow-lg">
         <defs>
           <radialGradient id={glowGrad} cx="50%" cy="42%" r="55%">
-            <stop offset="0%" stopColor="oklch(0.88 0.16 70 / 0.55)" />
-            <stop offset="70%" stopColor="oklch(0.78 0.14 60 / 0.12)" />
-            <stop offset="100%" stopColor="oklch(0.16 0.01 50 / 0)" />
+            <stop offset="0%" stopColor="var(--ensayin-highlight)" stopOpacity="0.55" />
+            <stop offset="70%" stopColor="var(--ensayin-gold)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="var(--background)" stopOpacity="0" />
           </radialGradient>
           <linearGradient id={bodyGrad} x1="28%" y1="8%" x2="78%" y2="96%">
-            <stop offset="0%" stopColor="oklch(0.92 0.1 78)" />
-            <stop offset="42%" stopColor="oklch(0.8 0.15 62)" />
-            <stop offset="100%" stopColor="oklch(0.64 0.13 55)" />
+            <stop offset="0%" stopColor="var(--ensayin-highlight)" />
+            <stop offset="42%" stopColor="var(--ensayin-gold)" />
+            <stop offset="100%" stopColor="var(--ensayin-gold-deep)" />
           </linearGradient>
           <radialGradient id={shineGrad} cx="34%" cy="26%" r="42%">
-            <stop offset="0%" stopColor="oklch(1 0.02 90 / 0.62)" />
-            <stop offset="100%" stopColor="oklch(1 0 0 / 0)" />
+            <stop offset="0%" stopColor="var(--ensayin-highlight)" stopOpacity="0.62" />
+            <stop offset="100%" stopColor="var(--background)" stopOpacity="0" />
           </radialGradient>
         </defs>
 
@@ -394,7 +394,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
             <path
               className="director-blob__brow director-blob__brow--l"
               d="M56 54 Q69 48 78 54"
-              stroke="oklch(0.42 0.07 45)"
+              stroke="var(--ensayin-ink)"
               strokeWidth="2.2"
               fill="none"
               strokeLinecap="round"
@@ -402,7 +402,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
             <path
               className="director-blob__brow director-blob__brow--r"
               d="M82 54 Q91 48 104 54"
-              stroke="oklch(0.42 0.07 45)"
+              stroke="var(--ensayin-ink)"
               strokeWidth="2.2"
               fill="none"
               strokeLinecap="round"
@@ -415,7 +415,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
               {happyEyes ? (
                 <path
                   d="M-10 2 Q0 -8 10 2"
-                  stroke="oklch(0.28 0.04 50)"
+                  stroke="var(--ensayin-ink)"
                   strokeWidth="3"
                   fill="none"
                   strokeLinecap="round"
@@ -428,12 +428,18 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
                     cy="0"
                     rx={eyeRx}
                     ry={eyeRy}
-                    fill="oklch(0.99 0.01 95)"
+                    fill="var(--background)"
                   />
                   <g ref={pupilLRef} className="director-blob__pupil-group">
-                    <circle cx="0" cy="0.6" r="4.4" fill="oklch(0.24 0.04 50)" />
-                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="oklch(1 0 0 / 0.95)" />
-                    <circle cx="1.6" cy="1.2" r="0.7" fill="oklch(1 0 0 / 0.45)" />
+                    <circle cx="0" cy="0.6" r="4.4" fill="var(--ensayin-ink)" />
+                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="var(--primary-foreground)" />
+                    <circle
+                      cx="1.6"
+                      cy="1.2"
+                      r="0.7"
+                      fill="var(--primary-foreground)"
+                      opacity="0.45"
+                    />
                   </g>
                 </>
               )}
@@ -442,7 +448,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
               {happyEyes ? (
                 <path
                   d="M-10 2 Q0 -8 10 2"
-                  stroke="oklch(0.28 0.04 50)"
+                  stroke="var(--ensayin-ink)"
                   strokeWidth="3"
                   fill="none"
                   strokeLinecap="round"
@@ -455,12 +461,18 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
                     cy="0"
                     rx={eyeRx}
                     ry={eyeRy}
-                    fill="oklch(0.99 0.01 95)"
+                    fill="var(--background)"
                   />
                   <g ref={pupilRRef} className="director-blob__pupil-group">
-                    <circle cx="0" cy="0.6" r="4.4" fill="oklch(0.24 0.04 50)" />
-                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="oklch(1 0 0 / 0.95)" />
-                    <circle cx="1.6" cy="1.2" r="0.7" fill="oklch(1 0 0 / 0.45)" />
+                    <circle cx="0" cy="0.6" r="4.4" fill="var(--ensayin-ink)" />
+                    <circle cx="-1.4" cy="-1.6" r="1.55" fill="var(--primary-foreground)" />
+                    <circle
+                      cx="1.6"
+                      cy="1.2"
+                      r="0.7"
+                      fill="var(--primary-foreground)"
+                      opacity="0.45"
+                    />
                   </g>
                 </>
               )}
@@ -474,7 +486,8 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
             cy="90"
             rx="8"
             ry="5"
-            fill={mood === "coach" ? "oklch(0.78 0.1 25 / 0.42)" : "oklch(0.74 0.14 25 / 0.45)"}
+            fill="var(--ensayin-blush)"
+            opacity={mood === "coach" ? 0.35 : 0.42}
           />
           <ellipse
             className="director-blob__cheek"
@@ -482,7 +495,8 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
             cy="90"
             rx="8"
             ry="5"
-            fill={mood === "coach" ? "oklch(0.78 0.1 25 / 0.42)" : "oklch(0.74 0.14 25 / 0.45)"}
+            fill="var(--ensayin-blush)"
+            opacity={mood === "coach" ? 0.35 : 0.42}
           />
 
           {/* Boca */}
@@ -493,12 +507,12 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
               cy="100"
               rx="7.5"
               ry="6"
-              fill="oklch(0.32 0.06 30)"
+              fill="var(--ensayin-ink)"
             />
           ) : mood === "celebrate" ? (
             <path
               d="M64 94 Q80 118 96 94"
-              stroke="oklch(0.3 0.05 40)"
+              stroke="var(--ensayin-ink)"
               strokeWidth="3.2"
               fill="none"
               strokeLinecap="round"
@@ -506,7 +520,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
           ) : mood === "coach" ? (
             <path
               d="M68 100 Q80 108 92 100"
-              stroke="oklch(0.34 0.05 40)"
+              stroke="var(--ensayin-ink)"
               strokeWidth="2.6"
               fill="none"
               strokeLinecap="round"
@@ -515,7 +529,7 @@ function DirectorBlob({ mood }: { mood: DirectorMood }) {
             <path
               className="director-blob__smile"
               d="M66 96 Q80 112 94 96"
-              stroke="oklch(0.3 0.05 40)"
+              stroke="var(--ensayin-ink)"
               strokeWidth="2.8"
               fill="none"
               strokeLinecap="round"

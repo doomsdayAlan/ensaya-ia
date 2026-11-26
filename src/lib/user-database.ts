@@ -244,6 +244,17 @@ export async function upsertProfile(profile: StoredProfile) {
   }
 }
 
+export async function listProfiles() {
+  const db = await openDb();
+  try {
+    return await requestToPromise<StoredProfile[]>(
+      db.transaction("perfil_usuario", "readonly").objectStore("perfil_usuario").getAll(),
+    );
+  } finally {
+    db.close();
+  }
+}
+
 export async function getProfile(userId: string) {
   const db = await openDb();
   try {
@@ -279,7 +290,7 @@ export function defaultStoredProfile(
     allow_improv: 1,
     feedback_enabled: 1,
     notifications_enabled: 1,
-    offline_mode_enabled: 1,
+    offline_mode_enabled: 0,
     privacy_level: "privado",
     terms_accepted_at: null,
     terms_version: null,
