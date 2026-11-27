@@ -22,8 +22,6 @@ type DirectorAvatarProps = {
   mood?: DirectorMood;
   /** 0–100: celebra si alto, anima si bajo. */
   score?: number;
-  /** Etiqueta de origen (ej. Notas del director · plantillas locales). */
-  sourceLabel?: string;
   /** Si true, lee el texto al montar (util en welcome futuro). */
   autoSpeak?: boolean;
   className?: string;
@@ -46,7 +44,6 @@ export function DirectorAvatar({
   text,
   mood: moodProp,
   score,
-  sourceLabel,
   autoSpeak = false,
   className = "",
 }: DirectorAvatarProps) {
@@ -139,7 +136,6 @@ export function DirectorAvatar({
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-medium text-sm">{title}</h3>
-              {sourceLabel && <p className="text-xs text-muted-foreground mt-0.5">{sourceLabel}</p>}
             </div>
             <button
               type="button"

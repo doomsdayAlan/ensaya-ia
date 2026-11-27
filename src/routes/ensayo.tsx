@@ -1511,7 +1511,15 @@ function LineCard({
                 </span>
               )}
             </div>
-            <p className="text-lg leading-relaxed font-display italic">"{line.text}"</p>
+            <p
+              className="leading-relaxed"
+              style={{
+                fontFamily: '"Times New Roman", Times, serif',
+                fontSize: "calc(1.125rem + 1pt)",
+              }}
+            >
+              "{line.text}"
+            </p>
             {line.cue && <div className="text-xs text-primary/80 text-right mt-2">{line.cue}</div>}
           </>
         ) : (
