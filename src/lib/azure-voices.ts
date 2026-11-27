@@ -59,8 +59,9 @@ const MALE_NAMES = new Set([
   "LUPERCIO",
 ]);
 
-export function findAzureVoice(stored: string | null | undefined): AzureVoice | null {
-  const value = stored?.trim();
+export function findAzureVoice(stored: unknown): AzureVoice | null {
+  if (typeof stored !== "string") return null;
+  const value = stored.trim();
   if (!value) return null;
   const bare = value.replace(/^azure:/i, "");
   return (
@@ -69,10 +70,11 @@ export function findAzureVoice(stored: string | null | undefined): AzureVoice | 
   );
 }
 
-export function voiceDisplayName(stored: string | null | undefined) {
+export function voiceDisplayName(stored: unknown) {
+  if (typeof stored !== "string") return "Voz del sistema";
   const azure = findAzureVoice(stored);
   if (azure) return azure.name;
-  const value = stored?.trim();
+  const value = stored.trim();
   return value || "Voz del sistema";
 }
 

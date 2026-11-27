@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -32,11 +32,35 @@ import { loadScriptSetupSafe, loadScriptsSafe, startLocalRehearsal } from "@/lib
 import type { SessionCastMember } from "@/lib/session-cast";
 import { getGrupoParaScript, isLibretoEnGrupo, isMiembroDelGrupo } from "@/lib/grupos-api";
 import { getLocalScriptSetup, updateLocalCharacter } from "@/lib/local-library";
+import { voiceDisplayName } from "@/lib/azure-voices";
 import {
   assignCharactersToHumans,
   computeConflictMatrixInMemory,
   type CastAssignmentResult,
 } from "@/lib/ai/actor-assignment";
+
+class VoiceSelectBoundary extends Component<
+  { fallbackLabel: string; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div>
+          <p className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">Voz</p>
+          <p className="mt-1 text-sm text-foreground">{this.props.fallbackLabel}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const EMOTIONS = ["Neutral", "Alegre", "Triste", "Enojo", "Miedo", "Calma"] as const;
 
@@ -826,17 +850,29 @@ function ConfigEnsayo() {
                       {tag === "Tú" ? (
                         <MiniValue label="Voz" value="Tu voz" />
                       ) : (
-                        <VoiceSelect
-                          label="Voz"
-                          value={character.voice ?? ""}
-                          systemVoices={browserVoices}
-                          previewText={`Así suena la voz elegida para ${character.name}`}
-                          onChange={(voice) => {
-                            if (!setup?.script) return;
-                            updateLocalCharacter(setup.script.id, character.id, { voice });
-                            void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
-                          }}
-                        />
+                        <VoiceSelectBoundary fallbackLabel={voiceDisplayName(character.voice)}>
+                          <VoiceSelect
+                            label="Voz"
+                            value={character.voice ?? ""}
+                            systemVoices={browserVoices}
+                            previewText={`Así suena la voz elegida para ${character.name}`}
+                            onChange={(voice) => {
+                              if (!setup?.script) return;
+                              try {
+                                updateLocalCharacter(setup.script.id, character.id, { voice });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ["script-setup-v2"],
+                                });
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "No se pudo guardar la voz del personaje.",
+                                );
+                              }
+                            }}
+                          />
+                        </VoiceSelectBoundary>
                       )}
                       <MiniValue label="Emoción base" value={character.base_emotion ?? "Neutral"} />
                       <div />
@@ -871,13 +907,21 @@ function ConfigEnsayo() {
                         onSave={(next) => {
                           const scriptId = setup.script?.id;
                           if (!scriptId) return;
-                          updateLocalCharacter(scriptId, character.id, {
-                            name: next.name,
-                            voice: next.voice,
-                            base_emotion: next.emotion,
-                          });
-                          void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
-                          setEditingCharacterId(null);
+                          try {
+                            updateLocalCharacter(scriptId, character.id, {
+                              name: next.name,
+                              voice: next.voice,
+                              base_emotion: next.emotion,
+                            });
+                            void queryClient.invalidateQueries({ queryKey: ["script-setup-v2"] });
+                            setEditingCharacterId(null);
+                          } catch (error) {
+                            toast.error(
+                              error instanceof Error
+                                ? error.message
+                                : "No se pudo guardar el personaje.",
+                            );
+                          }
                         }}
                       />
                     ) : null}

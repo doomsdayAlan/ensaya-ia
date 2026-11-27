@@ -56,7 +56,9 @@ export function VoiceSelect({
 
   const female = azureVoices.filter((voice) => voice.gender === "femenina");
   const male = azureVoices.filter((voice) => voice.gender === "masculina");
-  const systems = systemVoices.filter((voice) => !AZURE_VOICES.some((item) => item.name === voice));
+  const systems = (Array.isArray(systemVoices) ? systemVoices : []).filter(
+    (voice) => !AZURE_VOICES.some((item) => item.name === voice),
+  );
   const playing = previewing === value;
 
   return (
@@ -147,7 +149,7 @@ function VoiceGroup({
         const active = option.value === selected || voiceDisplayName(selected) === option.label;
         return (
           <button
-            key={option.value}
+            key={`${title}-${option.value}`}
             type="button"
             onClick={() => onSelect(option.value)}
             className={`block w-full rounded-lg px-3 py-2 text-left transition ${

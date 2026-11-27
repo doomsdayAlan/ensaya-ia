@@ -12,13 +12,45 @@ import {
   splitNamedCue,
 } from "@/lib/script-text";
 import { consolidateScriptLines } from "@/lib/consolidate-script-lines";
-import { getDemoScriptSetup } from "@/lib/demo-script";
+import { DEMO_SCRIPT_ID, getDemoScriptSetup } from "@/lib/demo-script";
 import { readJson, writeJson } from "@/lib/browser";
 import { LEGACY_STORAGE } from "@/lib/legacy-migration";
 import { catalogActorType } from "@/lib/session-cast";
 import { createCastAssigner } from "@/lib/azure-voices";
 
 const LIBRARY_KEY = "ensaya-ia-library";
+const DEMO_CHARACTER_VOICES_KEY = "ensaya-ia-demo-character-voices";
+
+type DemoCharacterVoices = Record<string, string>;
+
+function readDemoCharacterVoices(): DemoCharacterVoices {
+  return readJson<DemoCharacterVoices>(localStorage, DEMO_CHARACTER_VOICES_KEY, {});
+}
+
+function writeDemoCharacterVoice(characterId: string, voice: string) {
+  const voices = readDemoCharacterVoices();
+  voices[characterId] = voice;
+  writeJson(localStorage, DEMO_CHARACTER_VOICES_KEY, voices);
+}
+
+function applyDemoCharacterVoices(setup: ScriptSetup): ScriptSetup {
+  const voices = readDemoCharacterVoices();
+  if (!Object.keys(voices).length) return setup;
+  const characters = setup.characters.map((item) =>
+    voices[item.id] !== undefined ? { ...item, voice: voices[item.id] } : item,
+  );
+  const byId = new Map(characters.map((item) => [item.id, item]));
+  return {
+    ...setup,
+    characters,
+    lines: setup.lines.map((line) => ({
+      ...line,
+      character: line.character_id
+        ? (byId.get(line.character_id) ?? line.character)
+        : line.character,
+    })),
+  };
+}
 
 type LocalLibrary = {
   scripts: ScriptRecord[];
@@ -54,7 +86,9 @@ export function listLocalScripts(includeDeleted = false) {
 export function getLocalScriptSetup(scriptId?: string, sceneId?: string): ScriptSetup | null {
   const library = readLibrary();
   const demo = getDemoScriptSetup();
-  if (!scriptId || scriptId === demo.script?.id) return demo;
+  if (!scriptId || scriptId === demo.script?.id || scriptId === DEMO_SCRIPT_ID) {
+    return applyDemoCharacterVoices(demo);
+  }
   const setup = library.setups[scriptId];
   if (!setup) return null;
   const scene = setup.scenes.find((item) => item.id === sceneId) ?? setup.scenes[0] ?? null;
@@ -167,6 +201,28 @@ export function updateLocalCharacter(
   characterId: string,
   patch: { name?: string; voice?: string; base_emotion?: string },
 ) {
+  if (scriptId === DEMO_SCRIPT_ID) {
+    const currentSetup = applyDemoCharacterVoices(getDemoScriptSetup());
+    const current = currentSetup.characters.find((item) => item.id === characterId);
+    if (!current) {
+      throw new Error("No se encontro el personaje del libreto demo.");
+    }
+    if (patch.voice !== undefined) {
+      writeDemoCharacterVoice(characterId, patch.voice);
+    }
+    const nameChanging = patch.name !== undefined && patch.name !== current.name;
+    const emotionChanging =
+      patch.base_emotion !== undefined && patch.base_emotion !== current.base_emotion;
+    if (nameChanging || emotionChanging) {
+      throw new Error("El libreto demo solo permite cambiar la voz de los personajes.");
+    }
+    return (
+      applyDemoCharacterVoices(getDemoScriptSetup()).characters.find(
+        (item) => item.id === characterId,
+      ) ?? null
+    );
+  }
+
   const library = readLibrary();
   const setup = library.setups[scriptId];
   if (!setup?.script) {
