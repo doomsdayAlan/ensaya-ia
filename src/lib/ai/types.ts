@@ -17,7 +17,8 @@ export type RehearsalFeedbackInput = {
 
 export type RehearsalFeedbackResult = {
   text: string;
-  source: AiProviderId;
+  /** Coincide con el texto devuelto: respuesta del modelo o plantilla local. */
+  source: "gemini" | "local";
   model?: string | null;
   reason?: string | null;
 };

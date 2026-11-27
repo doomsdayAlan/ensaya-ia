@@ -1,5 +1,10 @@
 import { originLabel, type AdviceOrigin } from "@/lib/ai/advice-origin";
 
+/** Línea discreta bajo las notas del director. */
+export function feedbackNotesOriginLine(source?: string | null) {
+  return source === "gemini" ? "Notas: Gemini" : "Notas: local";
+}
+
 export function feedbackSourceLabel(
   source?: string | null,
   model?: string | null,

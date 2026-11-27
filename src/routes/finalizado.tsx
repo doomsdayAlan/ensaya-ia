@@ -23,7 +23,7 @@ import { AppShell } from "@/components/AppShell";
 import { TopBar } from "@/components/TopBar";
 import { DirectorAvatar } from "@/components/DirectorAvatar";
 import { formatDuration, getPerfilUsuario } from "@/lib/rehearsal-data";
-import { interpretationSourceLabel } from "@/lib/ai/feedback-label";
+import { feedbackNotesOriginLine } from "@/lib/ai/feedback-label";
 import {
   loadLocalReport,
   loadRecentRehearsalsSafe,
@@ -271,6 +271,9 @@ function Finalizado() {
             score={mode === "lectura" ? undefined : overall}
             className="mt-4"
           />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {feedbackNotesOriginLine(localReport?.feedbackSource)}
+          </p>
         </div>
       </div>
 
@@ -468,7 +471,6 @@ function InterpretationDetail({
   return (
     <div className="mb-4 space-y-3">
       <h4 className="text-sm font-medium">Consejos de interpretación (orientativos)</h4>
-      <p className="text-xs text-foreground/80">{interpretationSourceLabel(block)}</p>
       <p className="text-xs text-muted-foreground">{block.disclaimer}</p>
       {block.notice ? <p className="text-xs text-muted-foreground">{block.notice}</p> : null}
       {block.lines.map((line) => {

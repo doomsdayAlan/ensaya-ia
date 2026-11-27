@@ -524,7 +524,7 @@ function Ensayo() {
           skipped,
         });
     let feedback = fallbackFeedback;
-    let feedbackSource = "template";
+    let feedbackSource: "gemini" | "local" = "local";
     let feedbackModel: string | null = null;
     let feedbackReason: string | null = isOfflineMode() ? "no hay conexión" : null;
     // Lectura: no pedir notas de director al modelo (no hay memorizacion que evaluar).
@@ -545,14 +545,15 @@ function Ensayo() {
           },
         });
         if (notes?.text) {
+          // La fuente sigue al texto mostrado; no la reescribimos después.
           feedback = notes.text;
-          feedbackSource = notes.source;
+          feedbackSource = notes.source === "gemini" ? "gemini" : "local";
           feedbackModel = notes.model ?? null;
           feedbackReason = notes.reason ?? null;
         }
       } catch {
         feedback = fallbackFeedback;
-        feedbackSource = "template";
+        feedbackSource = "local";
         feedbackReason = "no hay conexión";
       }
     }
@@ -678,9 +679,9 @@ function Ensayo() {
           projection,
           score,
           feedback,
-          feedbackSource: !isLectura && isOfflineMode() ? "template" : feedbackSource,
+          feedbackSource,
           feedbackModel,
-          feedbackReason: !isLectura && isOfflineMode() ? "no hay conexión" : feedbackReason,
+          feedbackReason,
           lineNotes: [...lineNotesRef.current],
           interpretation,
         },

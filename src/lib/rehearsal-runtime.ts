@@ -211,7 +211,7 @@ export function loadReportFromHistoryId(id: string): LocalRehearsalReport | null
     projection: row.projection_score ?? 0,
     score: row.score ?? 0,
     feedback: row.feedback_summary ?? "Sin retroalimentacion guardada.",
-    feedbackSource: row.feedbackSource ?? "template",
+    feedbackSource: row.feedbackSource === "gemini" ? "gemini" : "local",
     feedbackModel: row.feedbackModel ?? null,
     feedbackReason: row.feedbackReason ?? null,
     lineNotes: row.lineNotes,
@@ -290,7 +290,7 @@ function appendLocalHistory(report: LocalRehearsalReport, context?: ReportContex
     ...summary,
     lineNotes: detail.lineNotes,
     interpretation: detail.interpretation,
-    feedbackSource: report.feedbackSource ?? null,
+    feedbackSource: report.feedbackSource === "gemini" ? "gemini" : "local",
     feedbackModel: report.feedbackModel ?? null,
     feedbackReason: report.feedbackReason ?? null,
   };

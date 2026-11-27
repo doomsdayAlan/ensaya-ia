@@ -4,18 +4,25 @@ import { getRehearsalAiProvider } from "@/lib/ai/get-provider";
 import { templateProvider } from "@/lib/ai/template-provider";
 import type { RehearsalFeedbackInput, RehearsalFeedbackResult } from "@/lib/ai/types";
 
+/** Resuelve con el primero que gane; el perdedor no puede cambiar el resultado. */
 function withTimeout<T>(promise: Promise<T>, ms: number) {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("Las notas del director tardaron demasiado.")),
-      ms,
-    );
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Las notas del director tardaron demasiado."));
+    }, ms);
     promise.then(
       (value) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         resolve(value);
       },
       (error) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         reject(error);
       },
@@ -30,12 +37,13 @@ export async function runRehearsalFeedback(
   const providerName = aiProviderName();
   const model = geminiModel();
   const hasKey = providerName === "gemini" ? Boolean(geminiApiKey()) : providerName !== "template";
-  const fallback = await templateProvider.generateFeedback(input);
+  const localText = await templateProvider.generateFeedback(input);
+
   const finish = (
     origin: ReturnType<typeof notesOrigin>,
     text: string,
     source: RehearsalFeedbackResult["source"],
-  ) => {
+  ): RehearsalFeedbackResult => {
     logAdvice({
       route: "notas",
       model: origin.model ?? model,
@@ -43,15 +51,21 @@ export async function runRehearsalFeedback(
       takes: 0,
       durationSec: 0,
       latencyMs: Date.now() - started,
-      result: origin.source === "gemini" ? "gemini" : "fallback",
+      result: source === "gemini" ? "gemini" : "fallback",
       reason: origin.reason,
     });
-    return { text, source, model: origin.model, reason: origin.reason };
+    // La fuente siempre coincide con el texto que se devuelve.
+    return {
+      text,
+      source,
+      model: origin.model,
+      reason: origin.reason,
+    };
   };
 
   const blocked = notesOrigin({ provider: providerName, hasKey, model });
   if (blocked.source !== "gemini") {
-    return finish(blocked, fallback, "template");
+    return finish(blocked, localText, "local");
   }
 
   try {
@@ -59,28 +73,33 @@ export async function runRehearsalFeedback(
     if (provider.id === "template") {
       return finish(
         notesOrigin({ provider: "template", hasKey: false, model }),
-        fallback,
-        "template",
+        localText,
+        "local",
       );
     }
     const text = await withTimeout(provider.generateFeedback(input), aiTimeoutMs());
-    if (!text.trim()) {
+    const trimmed = text.trim();
+    if (!trimmed) {
       return finish(
         notesOrigin({ provider: providerName, hasKey, model, empty: true }),
-        fallback,
-        "template",
+        localText,
+        "local",
       );
     }
     return finish(
-      { source: "gemini", model: provider.id === "gemini" ? model : provider.id, reason: null },
-      text.trim(),
-      provider.id,
+      {
+        source: "gemini",
+        model: provider.id === "gemini" ? model : provider.id,
+        reason: null,
+      },
+      trimmed,
+      "gemini",
     );
   } catch (error) {
     return finish(
       notesOrigin({ provider: providerName, hasKey, model, error }),
-      fallback,
-      "template",
+      localText,
+      "local",
     );
   }
 }
